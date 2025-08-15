@@ -1,0 +1,107 @@
+# QuantCore dbt Project Configuration
+
+name: 'quantcore_financial_data'
+version: '1.0.0'
+config-version: 2
+
+# This setting configures which "profile" dbt uses for this project.
+profile: 'quantcore'
+
+# These configurations specify where dbt should look for different types of files.
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# Configuring models
+models:
+  quantcore_financial_data:
+    # Config indicated by + and applies to all files under models/example/
+    staging:
+      +materialized: view
+      +schema: staging
+      +tags: ["staging", "financial_data"]
+    marts:
+      +materialized: table
+      +schema: marts
+      +tags: ["marts", "analytics"]
+      +post-hook: "ANALYZE TABLE {{ this }}"  # For query optimization
+    
+    # Model-specific configurations
+    staging:
+      +docs:
+        description: "Staging models for data from external financial data vendors"
+    marts:
+      +docs:
+        description: "Analytics-ready models for financial analysis and reporting"
+
+# Test configurations
+tests:
+  +store_failures: true
+  +schema: test_failures
+
+# Snapshot configurations
+snapshots:
+  quantcore_financial_data:
+    +target_schema: snapshots
+    +strategy: timestamp
+    +updated_at: updated_at
+
+# Seeds configuration
+seeds:
+  quantcore_financial_data:
+    +schema: reference_data
+    +tags: ["seeds", "reference"]
+
+# Macro configurations
+dispatch:
+  - macro_namespace: dbt_utils
+    search_order: ['quantcore_macros', 'dbt_utils']
+
+# Documentation
+docs:
+  generate: true
+  
+# Vars for dynamic configuration
+vars:
+  # Date variables
+  start_date: '2020-01-01'
+  end_date: '{{ run_started_at.strftime("%Y-%m-%d") }}'
+  
+  # Data quality thresholds
+  min_data_quality_score: 0.7
+  max_missing_data_pct: 20
+  
+  # Risk calculation parameters
+  risk_free_rate: 0.02
+  market_benchmark: 'SPY'
+  
+  # Sector analysis parameters
+  min_market_cap: 1000000000  # $1B minimum market cap
+  
+  # Feature engineering parameters
+  short_ma_period: 20
+  long_ma_period: 50
+  volatility_lookback_days: 252
+  
+  # Database-specific configurations
+  snowflake:
+    warehouse: 'QUANTCORE_WH'
+    database: 'QUANTCORE_DB'
+  
+# On-run-start and on-run-end hooks
+on-run-start:
+  - "CREATE SCHEMA IF NOT EXISTS {{ target.schema }}_staging"
+  - "CREATE SCHEMA IF NOT EXISTS {{ target.schema }}_marts" 
+  - "CREATE SCHEMA IF NOT EXISTS {{ target.schema }}_snapshots"
+  - "CREATE SCHEMA IF NOT EXISTS {{ target.schema }}_test_failures"
+
+on-run-end:
+  - "{{ log('QuantCore dbt run completed at ' ~ run_started_at, info=true) }}"
