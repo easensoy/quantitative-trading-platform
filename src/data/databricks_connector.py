@@ -8,7 +8,6 @@ import json
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor
 import os
-
 from databricks import sql
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service import compute, jobs
@@ -16,53 +15,40 @@ from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.functions import col, lag, stddev, avg, first, last, max as spark_max, min as spark_min
 from pyspark.sql.window import Window
 from delta import DeltaTable
-
 from src.core.config import get_config
 from src.core.exceptions import DatabaseError
 from src.data.loaders import DataLoader
-
-
 class DatabricksConnector(DataLoader):
     def __init__(self, config: Optional[Dict] = None):
         self.config = config or get_config().databricks
         self.workspace_client = None
         self.sql_connection = None
         self.spark = None
-
     async def connect(self) -> None:
         try:
-            # Initialize workspace client
             self.workspace_client = WorkspaceClient(
                 host=self.config.databricks_host,
                 token=self.config.databricks_token
             )
-            
-            # Initialize SQL connection
             self.sql_connection = sql.connect(
                 server_hostname=self.config.databricks_server_hostname,
                 http_path=self.config.databricks_http_path,
                 access_token=self.config.databricks_token
             )
-            
-            # Initialize Spark session if running on Databricks
             if self._is_databricks_environment():
                 self.spark = SparkSession.builder \
                     .appName("QuantCore-MarketData") \
                     .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
                     .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
                     .getOrCreate()
-                    
         except Exception as e:
             raise DatabaseError(f"Failed to connect to Databricks: {e}")
-
     def _is_databricks_environment(self) -> bool:
-        """Check if running in Databricks environment"""
+        
         return 'DATABRICKS_RUNTIME_VERSION' in os.environ
-
     async def load(self, data: Any, table_name: str, **kwargs) -> bool:
         if not self.sql_connection:
             await self.connect()
-
         try:
             if isinstance(data, pd.DataFrame):
                 return await self._load_dataframe(data, table_name, **kwargs)
@@ -74,68 +60,44 @@ class DatabricksConnector(DataLoader):
                 raise DatabaseError(f"Unsupported data type: {type(data)}")
         except Exception as e:
             raise DatabaseError(f"Failed to load data to Databricks: {e}")
-
     async def _load_dataframe(self, df: pd.DataFrame, table_name: str, **kwargs) -> bool:
         if df.empty:
             return True
-
         try:
-            mode = kwargs.get('mode', 'append')  # append, overwrite, merge
+            mode = kwargs.get('mode', 'append')
             partition_cols = kwargs.get('partition_cols', [])
-            
-            # Convert pandas DataFrame to Spark DataFrame if Spark is available
             if self.spark:
                 spark_df = self.spark.createDataFrame(df)
-                
-                # Write to Delta table
                 writer = spark_df.write.format("delta")
-                
                 if partition_cols:
                     writer = writer.partitionBy(*partition_cols)
-                
                 if mode == 'merge':
                     await self._merge_delta_table(spark_df, table_name, kwargs.get('merge_keys', []))
                 else:
                     writer.mode(mode).saveAsTable(table_name)
-                
             else:
-                # Fallback to SQL approach
                 await self._sql_insert_dataframe(df, table_name, mode)
-            
             return True
-
         except Exception as e:
             raise DatabaseError(f"Failed to load DataFrame to Databricks: {e}")
-
     async def _merge_delta_table(self, spark_df: DataFrame, table_name: str, merge_keys: List[str]) -> None:
-        """Perform merge operation on Delta table"""
+        
         if not merge_keys:
             raise DatabaseError("Merge keys must be specified for merge operation")
-
-        # Check if table exists
         try:
             delta_table = DeltaTable.forName(self.spark, table_name)
-            
-            # Build merge condition
             merge_condition = " AND ".join([f"target.{key} = source.{key}" for key in merge_keys])
-            
-            # Perform merge
             delta_table.alias("target") \
                 .merge(spark_df.alias("source"), merge_condition) \
                 .whenMatchedUpdateAll() \
                 .whenNotMatchedInsertAll() \
                 .execute()
-                
         except Exception:
-            # Table doesn't exist, create it
             spark_df.write.format("delta").saveAsTable(table_name)
-
     async def _sql_insert_dataframe(self, df: pd.DataFrame, table_name: str, mode: str) -> None:
-        """Insert DataFrame using SQL connection"""
-        cursor = self.sql_connection.cursor()
         
+        cursor = self.sql_connection.cursor()
         try:
-            # Create table if it doesn't exist
             columns = []
             for col_name, dtype in df.dtypes.items():
                 if 'int' in str(dtype):
@@ -147,19 +109,14 @@ class DatabricksConnector(DataLoader):
                 else:
                     sql_type = 'STRING'
                 columns.append(f"{col_name} {sql_type}")
-            
             create_sql = f"""
                 CREATE TABLE IF NOT EXISTS {table_name} (
                     {', '.join(columns)}
                 ) USING DELTA
             """
             cursor.execute(create_sql)
-            
-            # Insert data
             if mode == 'overwrite':
                 cursor.execute(f"DELETE FROM {table_name}")
-            
-            # Batch insert
             batch_size = 1000
             for i in range(0, len(df), batch_size):
                 batch = df.iloc[i:i + batch_size]
@@ -174,38 +131,29 @@ class DatabricksConnector(DataLoader):
                         else:
                             row_values.append(str(val))
                     values.append(f"({', '.join(row_values)})")
-                
                 if values:
                     insert_sql = f"""
                         INSERT INTO {table_name} VALUES {', '.join(values)}
                     """
                     cursor.execute(insert_sql)
-            
         finally:
             cursor.close()
-
     async def _load_list(self, data: List[Dict], table_name: str, **kwargs) -> bool:
         if not data:
             return True
-
         df = pd.DataFrame(data)
         return await self._load_dataframe(df, table_name, **kwargs)
-
     async def _load_dict(self, data: Dict, table_name: str, **kwargs) -> bool:
         df = pd.DataFrame([data])
         return await self._load_dataframe(df, table_name, **kwargs)
-
     async def create_table(self, table_name: str, schema: Dict[str, str]) -> bool:
         if not self.sql_connection:
             await self.connect()
-
         cursor = self.sql_connection.cursor()
-
         try:
             columns_def = []
             for column_name, column_type in schema.items():
                 columns_def.append(f"{column_name} {column_type}")
-
             create_query = f"""
                 CREATE TABLE IF NOT EXISTS {table_name} (
                     {', '.join(columns_def)},
@@ -213,22 +161,17 @@ class DatabricksConnector(DataLoader):
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
                 ) USING DELTA
             """
-
             cursor.execute(create_query)
             return True
-
         except Exception as e:
             raise DatabaseError(f"Failed to create Databricks table {table_name}: {e}")
         finally:
             cursor.close()
-
     async def execute_query(self, query: str, **kwargs) -> pd.DataFrame:
-        """Execute SQL query and return results as DataFrame"""
+        
         if not self.sql_connection:
             await self.connect()
-
         cursor = self.sql_connection.cursor()
-        
         try:
             cursor.execute(query)
             results = cursor.fetchall()
@@ -238,25 +181,18 @@ class DatabricksConnector(DataLoader):
             raise DatabaseError(f"Failed to execute query: {e}")
         finally:
             cursor.close()
-
     async def close(self) -> None:
         if self.sql_connection:
             self.sql_connection.close()
         if self.spark:
             self.spark.stop()
-
-
 class DatabricksMarketDataProcessor:
-    """Advanced market data processing using Databricks and Spark"""
     
     def __init__(self, config: Optional[Dict] = None):
         self.connector = DatabricksConnector(config)
         self.config = config or get_config().databricks
-
     async def create_market_data_lakehouse(self) -> bool:
-        """Create optimized lakehouse architecture for market data"""
         
-        # Bronze layer - Raw data ingestion
         bronze_tables = {
             'market_data_bronze': {
                 'symbol': 'STRING',
@@ -287,8 +223,6 @@ class DatabricksMarketDataProcessor:
                 'ingestion_timestamp': 'TIMESTAMP'
             }
         }
-
-        # Silver layer - Cleaned and validated data
         silver_tables = {
             'market_data_silver': {
                 'symbol': 'STRING',
@@ -303,8 +237,6 @@ class DatabricksMarketDataProcessor:
                 'source': 'STRING'
             }
         }
-
-        # Gold layer - Analytics-ready data
         gold_tables = {
             'market_analytics_gold': {
                 'symbol': 'STRING',
@@ -326,34 +258,25 @@ class DatabricksMarketDataProcessor:
                 'volume_ratio': 'DOUBLE'
             }
         }
-
         success = True
         all_tables = {**bronze_tables, **silver_tables, **gold_tables}
-        
         for table_name, schema in all_tables.items():
             try:
                 await self.connector.create_table(table_name, schema)
             except Exception as e:
                 print(f"Failed to create table {table_name}: {e}")
                 success = False
-
         return success
-
     async def create_streaming_jobs(self) -> bool:
-        """Create Databricks streaming jobs for real-time processing"""
         
         if not self.connector.spark:
             print("Spark session not available for streaming jobs")
             return False
-
         try:
-            # Bronze to Silver streaming transformation
             bronze_stream = self.connector.spark \
                 .readStream \
                 .format("delta") \
                 .table("market_data_bronze")
-
-            # Data quality checks and transformations
             silver_stream = bronze_stream \
                 .filter(col("open") > 0) \
                 .filter(col("high") >= col("low")) \
@@ -363,26 +286,18 @@ class DatabricksMarketDataProcessor:
                            when((col("high") >= col("low")) & 
                                 (col("open") > 0) & 
                                 (col("close") > 0), 1.0).otherwise(0.5))
-
-            # Write to Silver table
             silver_query = silver_stream \
                 .writeStream \
                 .format("delta") \
                 .outputMode("append") \
                 .option("checkpointLocation", "/tmp/silver_checkpoint") \
                 .table("market_data_silver")
-
-            # Silver to Gold analytics transformation
             silver_read_stream = self.connector.spark \
                 .readStream \
                 .format("delta") \
                 .table("market_data_silver")
-
-            # Window specifications for technical indicators
             symbol_window = Window.partitionBy("symbol").orderBy("timestamp")
             symbol_window_20 = symbol_window.rowsBetween(-19, 0)
-
-            # Technical indicators calculation
             analytics_stream = silver_read_stream \
                 .withColumn("returns", 
                            (col("close") - lag("close", 1).over(symbol_window)) / 
@@ -395,37 +310,26 @@ class DatabricksMarketDataProcessor:
                            avg("close").over(symbol_window_20)) \
                 .withColumn("volume_ratio", 
                            col("volume") / avg("volume").over(symbol_window_20))
-
-            # Write to Gold table
             gold_query = analytics_stream \
                 .writeStream \
                 .format("delta") \
                 .outputMode("append") \
                 .option("checkpointLocation", "/tmp/gold_checkpoint") \
                 .table("market_analytics_gold")
-
             return True
-
         except Exception as e:
             print(f"Failed to create streaming jobs: {e}")
             return False
-
     async def create_ml_features(self) -> bool:
-        """Create ML feature tables for algorithmic trading"""
         
         if not self.connector.spark:
             return False
-
         try:
-            # Read from gold table
             market_data = self.connector.spark.table("market_analytics_gold")
-
-            # Advanced feature engineering
             symbol_window = Window.partitionBy("symbol").orderBy("timestamp")
             symbol_window_5 = symbol_window.rowsBetween(-4, 0)
             symbol_window_20 = symbol_window.rowsBetween(-19, 0)
             symbol_window_50 = symbol_window.rowsBetween(-49, 0)
-
             ml_features = market_data \
                 .withColumn("price_momentum_5", 
                            (col("close") - lag("close", 5).over(symbol_window)) / 
@@ -445,21 +349,15 @@ class DatabricksMarketDataProcessor:
                            when(col("rsi_14") > 70, "overbought")
                            .when(col("rsi_14") < 30, "oversold")
                            .otherwise("neutral"))
-
-            # Save as feature table
             ml_features.write \
                 .format("delta") \
                 .mode("overwrite") \
                 .saveAsTable("ml_features_gold")
-
             return True
-
         except Exception as e:
             print(f"Failed to create ML features: {e}")
             return False
-
     async def run_batch_processing_job(self, symbols: List[str], start_date: str, end_date: str) -> bool:
-        """Submit batch processing job to Databricks"""
         
         try:
             job_spec = {
@@ -483,28 +381,18 @@ class DatabricksMarketDataProcessor:
                 },
                 "timeout_seconds": 3600
             }
-
-            # Submit job
             job_response = self.connector.workspace_client.jobs.create(**job_spec)
             run_response = self.connector.workspace_client.jobs.run_now(job_id=job_response.job_id)
-            
             print(f"Submitted job with run ID: {run_response.run_id}")
             return True
-
         except Exception as e:
             print(f"Failed to submit batch job: {e}")
             return False
-
     async def close(self) -> None:
         await self.connector.close()
-
-
-# Integration functions
 def create_databricks_connector() -> DatabricksConnector:
-    """Factory function to create Databricks connector"""
+    
     return DatabricksConnector()
-
-
 def create_databricks_processor() -> DatabricksMarketDataProcessor:
-    """Factory function to create Databricks market data processor"""
+    
     return DatabricksMarketDataProcessor()
