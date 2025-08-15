@@ -1,0 +1,367 @@
+version: 2
+
+sources:
+  - name: bloomberg
+    description: "Bloomberg Terminal/API data"
+    tables:
+      - name: equity_data
+        description: "Bloomberg equity price and volume data"
+        columns:
+          - name: security
+            description: "Bloomberg security identifier (e.g., 'AAPL Equity')"
+            tests:
+              - not_null
+          - name: date
+            description: "Trading date"
+            tests:
+              - not_null
+          - name: px_last
+            description: "Last price"
+            tests:
+              - not_null
+              - dbt_utils.accepted_range:
+                  min_value: 0
+                  inclusive: false
+
+      - name: fundamental_data
+        description: "Bloomberg fundamental data"
+        columns:
+          - name: security
+            description: "Bloomberg security identifier"
+            tests:
+              - not_null
+          - name: sales_rev_turn
+            description: "Revenue/Sales"
+          - name: market_cap
+            description: "Market capitalization"
+
+  - name: refinitiv
+    description: "Refinitiv Eikon/Workspace data"
+    tables:
+      - name: equity_data
+        description: "Refinitiv equity price data"
+        columns:
+          - name: instrument
+            description: "Refinitiv RIC (Reuters Instrument Code)"
+            tests:
+              - not_null
+          - name: date
+            description: "Trading date"
+            tests:
+              - not_null
+
+      - name: company_data
+        description: "Refinitiv company fundamental and classification data"
+        columns:
+          - name: instrument
+            description: "Refinitiv RIC"
+            tests:
+              - not_null
+          - name: tr_commonname
+            description: "Company common name"
+          - name: tr_gicssectorname
+            description: "GICS Sector Name"
+
+  - name: factset
+    description: "FactSet data"
+    tables:
+      - name: prices_data
+        description: "FactSet price data"
+        columns:
+          - name: id
+            description: "FactSet entity ID"
+            tests:
+              - not_null
+          - name: date
+            description: "Trading date"
+            tests:
+              - not_null
+
+      - name: fundamentals_data
+        description: "FactSet fundamental data"
+        columns:
+          - name: id
+            description: "FactSet entity ID"
+            tests:
+              - not_null
+
+models:
+  - name: stg_bloomberg_equity
+    description: "Staged Bloomberg equity data with standardized schema and data quality validations"
+    columns:
+      - name: symbol
+        description: "Standardized stock symbol (e.g., 'AAPL')"
+        tests:
+          - not_null
+          - dbt_utils.not_empty_string
+      - name: trade_date
+        description: "Trading date"
+        tests:
+          - not_null
+      - name: close_price
+        description: "Closing price"
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: false
+      - name: data_source
+        description: "Data source identifier"
+        tests:
+          - accepted_values:
+              values: ['bloomberg']
+
+  - name: stg_refinitiv_equity
+    description: "Staged Refinitiv equity data with standardized schema"
+    columns:
+      - name: symbol
+        description: "Standardized stock symbol"
+        tests:
+          - not_null
+      - name: trade_date
+        description: "Trading date"
+        tests:
+          - not_null
+      - name: close_price
+        description: "Closing price"
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: false
+
+  - name: stg_factset_equity
+    description: "Staged FactSet equity data with standardized schema"
+    columns:
+      - name: symbol
+        description: "Standardized stock symbol"
+        tests:
+          - not_null
+      - name: trade_date
+        description: "Trading date"
+        tests:
+          - not_null
+      - name: close_price
+        description: "Closing price"
+        tests:
+          - not_null
+
+  - name: equity_prices
+    description: "Consolidated equity price data from all vendors with technical indicators"
+    columns:
+      - name: symbol
+        description: "Stock symbol"
+        tests:
+          - not_null
+          - dbt_utils.not_empty_string
+      - name: trade_date
+        description: "Trading date"
+        tests:
+          - not_null
+      - name: close_price
+        description: "Closing price (deduplicated best quality source)"
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: false
+      - name: daily_return
+        description: "Daily return as decimal (-1 to 1 range for ±100%)"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: -1
+              max_value: 1
+      - name: sma_20
+        description: "20-day simple moving average"
+      - name: sma_50
+        description: "50-day simple moving average"
+      - name: bollinger_upper
+        description: "Upper Bollinger Band (2 std dev above 20-day SMA)"
+      - name: bollinger_lower
+        description: "Lower Bollinger Band (2 std dev below 20-day SMA)"
+      - name: volume_ratio
+        description: "Current volume / 20-day average volume"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: false
+      - name: data_source
+        description: "Source of the selected data record"
+        tests:
+          - accepted_values:
+              values: ['bloomberg', 'refinitiv', 'factset']
+      - name: completeness_score
+        description: "Data completeness score (0-1)"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1
+      - name: consistency_score
+        description: "Data consistency score (0-1)"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1
+
+  - name: fundamental_metrics
+    description: "Consolidated fundamental metrics from all vendors"
+    columns:
+      - name: symbol
+        description: "Stock symbol"
+        tests:
+          - not_null
+          - unique
+      - name: revenue
+        description: "Total revenue/sales"
+      - name: net_income
+        description: "Net income"
+      - name: market_cap
+        description: "Market capitalization"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: false
+      - name: pe_ratio
+        description: "Price-to-earnings ratio"
+      - name: price_to_book
+        description: "Price-to-book ratio"
+      - name: roe
+        description: "Return on equity"
+      - name: debt_to_equity
+        description: "Debt-to-equity ratio"
+      - name: net_margin
+        description: "Net profit margin"
+      - name: profitability_status
+        description: "Profitability categorization"
+        tests:
+          - accepted_values:
+              values: ['profitable', 'unprofitable', 'insufficient_data']
+      - name: roe_category
+        description: "ROE performance category"
+        tests:
+          - accepted_values:
+              values: ['high', 'medium', 'low', 'poor', 'unknown']
+
+  - name: risk_metrics
+    description: "Comprehensive risk metrics for all securities"
+    columns:
+      - name: symbol
+        description: "Stock symbol"
+        tests:
+          - not_null
+          - unique
+      - name: trade_date
+        description: "Latest trading date for risk calculation"
+        tests:
+          - not_null
+      - name: volatility_30d
+        description: "30-day annualized volatility"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 5  # 500% volatility cap
+      - name: volatility_1y
+        description: "1-year annualized volatility"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 5
+      - name: beta_1y
+        description: "1-year beta relative to market"
+      - name: sharpe_ratio_1y
+        description: "1-year Sharpe ratio"
+      - name: max_drawdown_1y
+        description: "Maximum drawdown over 1 year"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: -1
+              max_value: 0
+      - name: var_95_1y
+        description: "95% Value at Risk (1 year)"
+      - name: var_99_1y
+        description: "99% Value at Risk (1 year)"
+      - name: expected_shortfall_95
+        description: "95% Expected Shortfall (CVaR)"
+      - name: volatility_category
+        description: "Volatility risk category"
+        tests:
+          - accepted_values:
+              values: ['low', 'medium', 'high', 'very_high', 'unknown']
+      - name: beta_category
+        description: "Beta risk category"
+        tests:
+          - accepted_values:
+              values: ['defensive', 'market', 'aggressive', 'unknown']
+      - name: risk_score
+        description: "Overall risk score (0-100, higher = riskier)"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+
+  - name: sector_analysis
+    description: "Comprehensive sector-level analysis and rankings"
+    columns:
+      - name: gics_sector
+        description: "GICS Sector Name"
+        tests:
+          - not_null
+          - unique
+      - name: stock_count
+        description: "Number of stocks in sector"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 1
+      - name: total_market_cap_billions
+        description: "Total market cap in billions USD"
+      - name: avg_daily_return_pct
+        description: "Average daily return percentage"
+      - name: avg_pe_ratio
+        description: "Average P/E ratio for sector"
+      - name: avg_roe_pct
+        description: "Average ROE percentage"
+      - name: avg_volatility_pct
+        description: "Average volatility percentage"
+      - name: performance_category
+        description: "Performance categorization"
+        tests:
+          - accepted_values:
+              values: ['outperforming', 'market_performing', 'underperforming', 'lagging']
+      - name: valuation_category
+        description: "Valuation attractiveness category"
+        tests:
+          - accepted_values:
+              values: ['attractive', 'fair', 'expensive', 'very_expensive']
+      - name: quality_category
+        description: "Fundamental quality category"
+        tests:
+          - accepted_values:
+              values: ['high_quality', 'good_quality', 'average_quality', 'low_quality']
+      - name: risk_category
+        description: "Risk level category"
+        tests:
+          - accepted_values:
+              values: ['low_risk', 'moderate_risk', 'high_risk', 'very_high_risk']
+      - name: overall_score
+        description: "Overall sector score (0-400)"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 400
+
+tests:
+  - name: test_data_freshness
+    description: "Ensure data is not older than 2 business days"
+    sql: |
+      select count(*)
+      from {{ ref('equity_prices') }}
+      where trade_date < current_date - interval '3 days'
+
+  - name: test_price_data_quality
+    description: "Ensure price data passes basic quality checks"
+    sql: |
+      select count(*)
+      from {{ ref('equity_prices') }}
+      where high_price < low_price
+         or close_price <= 0
+         or (open_price is not null and open_price <= 0)
