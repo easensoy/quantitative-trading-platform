@@ -33,7 +33,6 @@ class SnowflakeLoader(DataLoader):
                 role=self.config.snowflake_role
             )
             
-            # Create SQLAlchemy engine for pandas integration
             engine_url = URL(
                 user=self.config.snowflake_user,
                 password=self.config.snowflake_password,
@@ -69,15 +68,13 @@ class SnowflakeLoader(DataLoader):
             return True
 
         try:
-            mode = kwargs.get('mode', 'append')  # append, replace, fail
+            mode = kwargs.get('mode', 'append')
             chunk_size = kwargs.get('chunk_size', 10000)
             auto_create_table = kwargs.get('auto_create_table', True)
             
-            # Clean data for Snowflake
             df_clean = df.copy()
             df_clean = df_clean.replace([np.inf, -np.inf], np.nan)
             
-            # Convert datetime columns
             for col in df_clean.columns:
                 if df_clean[col].dtype == 'datetime64[ns]':
                     df_clean[col] = pd.to_datetime(df_clean[col])
@@ -135,7 +132,6 @@ class SnowflakeLoader(DataLoader):
             cursor.close()
 
     async def execute_query(self, query: str, params: Optional[Dict] = None) -> pd.DataFrame:
-        """Execute a query and return results as DataFrame"""
         if not self.engine:
             await self.connect()
 
@@ -152,13 +148,11 @@ class SnowflakeLoader(DataLoader):
 
 
 class SnowflakeWarehouse:
-    """Data warehouse operations for financial market data"""
     
     def __init__(self, config: Optional[Dict] = None):
         self.loader = SnowflakeLoader(config)
 
     async def create_financial_schema(self) -> bool:
-        """Create optimized schema for financial data"""
         tables = {
             'market_data_raw': {
                 'SYMBOL': 'VARCHAR(20)',
@@ -218,7 +212,6 @@ class SnowflakeWarehouse:
         return success
 
     async def create_time_series_streams(self) -> bool:
-        """Create Snowflake streams for real-time data processing"""
         streams = [
             """
             CREATE OR REPLACE STREAM market_data_stream 
@@ -251,7 +244,6 @@ class SnowflakeWarehouse:
         return success
 
     async def create_data_pipelines(self) -> bool:
-        """Create Snowflake tasks for automated data processing"""
         tasks = [
             """
             CREATE OR REPLACE TASK process_market_data_task
@@ -267,9 +259,7 @@ class SnowflakeWarehouse:
                 timestamp,
                 (close - LAG(close) OVER (PARTITION BY symbol ORDER BY timestamp)) / LAG(close) OVER (PARTITION BY symbol ORDER BY timestamp) as returns,
                 STDDEV(close) OVER (PARTITION BY symbol ORDER BY timestamp ROWS BETWEEN 19 PRECEDING AND CURRENT ROW) as volatility,
-                -- RSI calculation would go here
                 NULL as rsi,
-                -- MACD calculation would go here  
                 NULL as macd,
                 close + (2 * STDDEV(close) OVER (PARTITION BY symbol ORDER BY timestamp ROWS BETWEEN 19 PRECEDING AND CURRENT ROW)) as bollinger_upper,
                 close - (2 * STDDEV(close) OVER (PARTITION BY symbol ORDER BY timestamp ROWS BETWEEN 19 PRECEDING AND CURRENT ROW)) as bollinger_lower,
@@ -280,7 +270,7 @@ class SnowflakeWarehouse:
             """
             CREATE OR REPLACE TASK aggregate_daily_data_task
             WAREHOUSE = 'QUANTCORE_WH'
-            SCHEDULE = '0 0 * * *'  -- Daily at midnight
+            SCHEDULE = '0 0 * * *'
             AS
             CREATE OR REPLACE TABLE daily_market_summary AS
             SELECT 
@@ -308,7 +298,6 @@ class SnowflakeWarehouse:
                 print(f"Failed to create task: {e}")
                 success = False
 
-        # Start the tasks
         try:
             cursor.execute("ALTER TASK process_market_data_task RESUME")
             cursor.execute("ALTER TASK aggregate_daily_data_task RESUME")
@@ -320,8 +309,6 @@ class SnowflakeWarehouse:
         return success
 
     async def load_market_data(self, data: pd.DataFrame) -> bool:
-        """Load market data optimized for Snowflake"""
-        # Add partition column for efficient querying
         data['load_date'] = pd.to_datetime(data['timestamp']).dt.date
         
         return await self.loader.load(
@@ -336,12 +323,9 @@ class SnowflakeWarehouse:
         await self.loader.close()
 
 
-# Integration with existing loaders
 def create_snowflake_loader() -> SnowflakeLoader:
-    """Factory function to create Snowflake loader"""
     return SnowflakeLoader()
 
 
 def create_snowflake_warehouse() -> SnowflakeWarehouse:
-    """Factory function to create Snowflake data warehouse"""
     return SnowflakeWarehouse()
