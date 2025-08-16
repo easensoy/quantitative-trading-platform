@@ -51,7 +51,6 @@ class HistoricalCovarianceModel(RiskModel):
             window = self.window
         
         recent_returns = returns.iloc[-window:]
-        
         if self.shrinkage_method == 'ledoit_wolf':
             lw = LedoitWolf()
             covariance_matrix = lw.fit(recent_returns).covariance_
