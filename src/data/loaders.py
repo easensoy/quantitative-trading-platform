@@ -48,7 +48,6 @@ class MySQLLoader(DataLoader):
     async def load(self, data: Any, table_name: str, **kwargs) -> bool:
         if not self.connection or not self.connection.is_connected():
             await self.connect()
-
         try:
             if isinstance(data, pd.DataFrame):
                 return await self._load_dataframe(data, table_name, **kwargs)
