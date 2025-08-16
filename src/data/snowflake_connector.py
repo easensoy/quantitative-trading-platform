@@ -43,7 +43,6 @@ class SnowflakeLoader(DataLoader):
                 role=self.config.snowflake_role
             )
             self.engine = create_engine(engine_url)
-            
         except Exception as e:
             raise DatabaseError(f"Failed to connect to Snowflake: {e}")
 
@@ -71,7 +70,6 @@ class SnowflakeLoader(DataLoader):
             mode = kwargs.get('mode', 'append')
             chunk_size = kwargs.get('chunk_size', 10000)
             auto_create_table = kwargs.get('auto_create_table', True)
-            
             df_clean = df.copy()
             df_clean = df_clean.replace([np.inf, -np.inf], np.nan)
             
@@ -148,7 +146,6 @@ class SnowflakeLoader(DataLoader):
 
 
 class SnowflakeWarehouse:
-    
     def __init__(self, config: Optional[Dict] = None):
         self.loader = SnowflakeLoader(config)
 
@@ -310,7 +307,6 @@ class SnowflakeWarehouse:
 
     async def load_market_data(self, data: pd.DataFrame) -> bool:
         data['load_date'] = pd.to_datetime(data['timestamp']).dt.date
-        
         return await self.loader.load(
             data, 
             'market_data_raw',
