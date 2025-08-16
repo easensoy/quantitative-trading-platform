@@ -54,7 +54,6 @@ class MarketDataExtractor(DataExtractor):
     async def extract(self, symbols: List[str], **kwargs) -> Dict[str, Any]:
         if not self.session:
             self.session = aiohttp.ClientSession()
-        
         tasks = []
         for symbol in symbols:
             task = asyncio.create_task(self.extract_realtime_data(symbol))
