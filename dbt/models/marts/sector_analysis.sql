@@ -7,14 +7,12 @@ with sector_mapping as (
             when instrument like '%.N' then left(instrument, position('.N' in instrument) - 1)
             else instrument
         end as symbol,
-        
         tr_gicssectorname as gics_sector,
         tr_gicsindustrygroupname as gics_industry_group,
         tr_gicsindustryname as gics_industry,
         tr_gicssubindustryname as gics_sub_industry,
         tr_siccode as sic_code,
         tr_naicscode as naics_code
-        
     from {{ source('refinitiv', 'company_data') }}
     where tr_gicssectorname is not null
 ),
@@ -55,7 +53,6 @@ risk_data as (
     from {{ ref('risk_metrics') }}
 ),
 
--- Combine all data
 sector_stock_data as (
     select 
         sm.symbol,
@@ -63,133 +60,92 @@ sector_stock_data as (
         sm.gics_industry_group,
         sm.gics_industry,
         sm.gics_sub_industry,
-        
         cp.close_price,
         cp.daily_return,
         cp.volatility_30d,
         cp.volume_ratio,
         cp.momentum_20d,
-        
         fm.market_cap,
         fm.pe_ratio,
         fm.price_to_book,
         fm.roe,
         fm.debt_to_equity,
         fm.net_margin,
-        
         rm.volatility_1y,
         rm.beta_1y,
         rm.sharpe_ratio_1y,
         rm.max_drawdown_1y,
         rm.risk_score
-        
     from sector_mapping sm
     left join current_prices cp on sm.symbol = cp.symbol
     left join fundamentals fm on sm.symbol = fm.symbol
     left join risk_data rm on sm.symbol = rm.symbol
-    
     where sm.gics_sector is not null
 ),
 
--- Calculate sector-level aggregations
 sector_aggregations as (
     select 
         gics_sector,
-        
-        -- Count and market cap
         count(*) as stock_count,
         sum(market_cap) as total_market_cap,
         avg(market_cap) as avg_market_cap,
         median(market_cap) as median_market_cap,
-        
-        -- Performance metrics
         avg(daily_return) as avg_daily_return,
         median(daily_return) as median_daily_return,
         stddev(daily_return) as daily_return_volatility,
         avg(momentum_20d) as avg_momentum_20d,
-        
-        -- Valuation metrics
         avg(pe_ratio) as avg_pe_ratio,
         median(pe_ratio) as median_pe_ratio,
         avg(price_to_book) as avg_price_to_book,
         median(price_to_book) as median_price_to_book,
-        
-        -- Fundamental strength
         avg(roe) as avg_roe,
         median(roe) as median_roe,
         avg(debt_to_equity) as avg_debt_to_equity,
         avg(net_margin) as avg_net_margin,
-        
-        -- Risk metrics
         avg(volatility_1y) as avg_volatility,
         median(volatility_1y) as median_volatility,
         avg(beta_1y) as avg_beta,
         avg(sharpe_ratio_1y) as avg_sharpe_ratio,
         avg(max_drawdown_1y) as avg_max_drawdown,
         avg(risk_score) as avg_risk_score,
-        
-        -- Performance distribution
         sum(case when daily_return > 0 then 1 else 0 end) as positive_return_count,
         sum(case when daily_return > 0 then 1 else 0 end) * 100.0 / count(*) as positive_return_pct,
-        
-        -- Market cap weighted returns
         sum(daily_return * market_cap) / nullif(sum(market_cap), 0) as market_cap_weighted_return
         
     from sector_stock_data
-    where market_cap is not null  -- Filter out stocks without market cap data
+    where market_cap is not null
     group by gics_sector
 ),
 
--- Calculate sector rankings and scores
 sector_rankings as (
     select 
         *,
-        
-        -- Performance rankings (1 = best)
         rank() over (order by avg_daily_return desc) as return_rank,
         rank() over (order by avg_momentum_20d desc) as momentum_rank,
         rank() over (order by avg_sharpe_ratio desc) as sharpe_rank,
-        
-        -- Valuation rankings (1 = most attractive/cheapest)
         rank() over (order by avg_pe_ratio asc) as pe_rank,
         rank() over (order by avg_price_to_book asc) as pb_rank,
-        
-        -- Quality rankings (1 = highest quality) 
         rank() over (order by avg_roe desc) as roe_rank,
         rank() over (order by avg_net_margin desc) as margin_rank,
         rank() over (order by avg_debt_to_equity asc) as leverage_rank,
-        
-        -- Risk rankings (1 = lowest risk)
         rank() over (order by avg_volatility asc) as volatility_rank,
         rank() over (order by avg_risk_score asc) as risk_rank,
-        
-        -- Size rankings
         rank() over (order by total_market_cap desc) as size_rank
         
     from sector_aggregations
 ),
 
--- Create composite scores
 sector_scores as (
     select 
         *,
-        
-        -- Performance score (lower rank = higher score)
         (100 - return_rank * 10) + (100 - momentum_rank * 10) + (100 - sharpe_rank * 10) as performance_score,
-        
-        -- Value score
         (100 - pe_rank * 10) + (100 - pb_rank * 10) as value_score,
-        
-        -- Quality score
         (100 - roe_rank * 10) + (100 - margin_rank * 10) + (100 - leverage_rank * 10) as quality_score,
-        
-        -- Safety score
         (100 - volatility_rank * 10) + (100 - risk_rank * 10) as safety_score
         
     from sector_rankings
 ),
 
--- Industry group aggregations
 industry_aggregations as (
     select 
         gics_sector,
@@ -211,8 +167,6 @@ industry_aggregations as (
 final_sector_analysis as (
     select 
         ss.*,
-        
-        -- Add descriptive categories
         case
             when ss.performance_score >= 250 then 'outperforming'
             when ss.performance_score >= 200 then 'market_performing' 
@@ -240,8 +194,6 @@ final_sector_analysis as (
             when ss.safety_score >= 120 then 'high_risk'
             else 'very_high_risk'
         end as risk_category,
-        
-        -- Overall sector score (combination of all factors)
         (ss.performance_score * 0.25 + ss.value_score * 0.25 + ss.quality_score * 0.25 + ss.safety_score * 0.25) as overall_score,
         
         current_timestamp() as analysis_date
@@ -254,39 +206,27 @@ select
     stock_count,
     total_market_cap / 1e9 as total_market_cap_billions,
     avg_market_cap / 1e6 as avg_market_cap_millions,
-    
-    -- Performance metrics
     round(avg_daily_return * 100, 2) as avg_daily_return_pct,
     round(avg_momentum_20d * 100, 2) as avg_momentum_20d_pct,
     round(market_cap_weighted_return * 100, 2) as market_cap_weighted_return_pct,
     round(positive_return_pct, 1) as positive_return_pct,
-    
-    -- Valuation metrics
     round(avg_pe_ratio, 1) as avg_pe_ratio,
     round(median_pe_ratio, 1) as median_pe_ratio,
     round(avg_price_to_book, 1) as avg_price_to_book,
-    
-    -- Quality metrics
     round(avg_roe * 100, 1) as avg_roe_pct,
     round(avg_debt_to_equity, 1) as avg_debt_to_equity,
     round(avg_net_margin * 100, 1) as avg_net_margin_pct,
-    
-    -- Risk metrics
     round(avg_volatility * 100, 1) as avg_volatility_pct,
     round(avg_beta, 2) as avg_beta,
     round(avg_sharpe_ratio, 2) as avg_sharpe_ratio,
     round(avg_max_drawdown * 100, 1) as avg_max_drawdown_pct,
     round(avg_risk_score, 0) as avg_risk_score,
-    
-    -- Rankings
     return_rank,
     momentum_rank, 
     pe_rank,
     roe_rank,
     volatility_rank,
     risk_rank,
-    
-    -- Scores and categories
     round(performance_score, 0) as performance_score,
     performance_category,
     round(value_score, 0) as value_score,
