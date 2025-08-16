@@ -46,9 +46,7 @@ def extract_market_data(**context):
     """Extract market data from various sources"""
     extractor = MarketDataExtractor()
     execution_date = context['execution_date']
-    
     symbols = Variable.get("market_data_symbols", default_var="AAPL,GOOGL,MSFT,TSLA").split(",")
-    
     market_data = {}
     for symbol in symbols:
         try:
@@ -56,7 +54,6 @@ def extract_market_data(**context):
             market_data[symbol] = data
         except Exception as e:
             print(f"Failed to extract data for {symbol}: {e}")
-    
     return market_data
 
 
@@ -64,9 +61,7 @@ def extract_fundamental_data(**context):
     """Extract fundamental data"""
     extractor = FundamentalDataExtractor()
     execution_date = context['execution_date']
-    
     symbols = Variable.get("fundamental_data_symbols", default_var="AAPL,GOOGL,MSFT,TSLA").split(",")
-    
     fundamental_data = {}
     for symbol in symbols:
         try:
@@ -74,23 +69,18 @@ def extract_fundamental_data(**context):
             fundamental_data[symbol] = data
         except Exception as e:
             print(f"Failed to extract fundamental data for {symbol}: {e}")
-    
     return fundamental_data
 
 
 def validate_and_clean_data(**context):
     """Validate and clean extracted data"""
     task_instance = context['task_instance']
-    
     market_data = task_instance.xcom_pull(task_ids='extract_market_data')
     fundamental_data = task_instance.xcom_pull(task_ids='extract_fundamental_data')
-    
     cleaner = DataCleaner()
     validator = DataValidator()
-    
     cleaned_market_data = {}
     cleaned_fundamental_data = {}
-    
     for symbol, data in market_data.items():
         try:
             cleaned_data = cleaner.clean_market_data(data)
@@ -151,13 +141,10 @@ def calculate_rsi(prices: pd.Series, window: int = 14) -> pd.Series:
     delta = prices.diff()
     gain = delta.where(delta > 0, 0)
     loss = -delta.where(delta < 0, 0)
-    
     avg_gain = gain.rolling(window=window).mean()
     avg_loss = loss.rolling(window=window).mean()
-    
     rs = avg_gain / avg_loss
     rsi = 100 - (100 / (1 + rs))
-    
     return rsi
 
 
@@ -165,29 +152,22 @@ def calculate_bollinger_bands(prices: pd.Series, window: int = 20, num_std: floa
     """Calculate Bollinger Bands"""
     sma = prices.rolling(window=window).mean()
     std = prices.rolling(window=window).std()
-    
     upper_band = sma + (std * num_std)
     lower_band = sma - (std * num_std)
-    
     return upper_band, lower_band
 
 
 def load_to_mysql(**context):
     """Load data to MySQL database"""
     task_instance = context['task_instance']
-    
     cleaned_data = task_instance.xcom_pull(task_ids='validate_and_clean_data')
     transformed_data = task_instance.xcom_pull(task_ids='transform_market_data')
-    
     loader = DatabaseLoader('mysql')
-    
     try:
         loader.load_market_data(cleaned_data['market_data'])
         loader.load_fundamental_data(cleaned_data['fundamental_data'])
         loader.load_analytics_data(transformed_data)
-        
         print("Successfully loaded data to MySQL")
-        
     except Exception as e:
         print(f"Failed to load data to MySQL: {e}")
         raise
@@ -196,15 +176,11 @@ def load_to_mysql(**context):
 def load_to_clickhouse(**context):
     """Load data to ClickHouse for analytics"""
     task_instance = context['task_instance']
-    
     transformed_data = task_instance.xcom_pull(task_ids='transform_market_data')
-    
     loader = DatabaseLoader('clickhouse')
-    
     try:
         loader.load_analytics_data(transformed_data)
         print("Successfully loaded data to ClickHouse")
-        
     except Exception as e:
         print(f"Failed to load data to ClickHouse: {e}")
         raise
@@ -213,9 +189,7 @@ def load_to_clickhouse(**context):
 def data_quality_check(**context):
     """Perform data quality checks"""
     mysql_hook = MySqlHook(mysql_conn_id='mysql_default')
-    
     execution_date = context['execution_date']
-    
     quality_checks = [
         {
             'name': 'market_data_count',
@@ -245,33 +219,26 @@ def data_quality_check(**context):
             'max_threshold': 120
         }
     ]
-    
     failed_checks = []
-    
     for check in quality_checks:
         try:
             result = mysql_hook.get_first(check['sql'])
             value = result[0] if result else 0
-            
             if 'min_threshold' in check and value < check['min_threshold']:
                 failed_checks.append(f"{check['name']}: {value} < {check['min_threshold']}")
             elif 'max_threshold' in check and value > check['max_threshold']:
                 failed_checks.append(f"{check['name']}: {value} > {check['max_threshold']}")
-                
         except Exception as e:
             failed_checks.append(f"{check['name']}: Error executing check - {e}")
-    
     if failed_checks:
         error_message = "Data quality checks failed:\n" + "\n".join(failed_checks)
         raise Exception(error_message)
-    
     print("All data quality checks passed")
 
 
 def send_completion_notification(**context):
     """Send notification upon successful completion"""
     execution_date = context['execution_date']
-    
     print(f"Market data pipeline completed successfully for {execution_date}")
 
 
