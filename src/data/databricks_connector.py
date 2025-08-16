@@ -44,7 +44,6 @@ class DatabricksConnector(DataLoader):
         except Exception as e:
             raise DatabaseError(f"Failed to connect to Databricks: {e}")
     def _is_databricks_environment(self) -> bool:
-        
         return 'DATABRICKS_RUNTIME_VERSION' in os.environ
     async def load(self, data: Any, table_name: str, **kwargs) -> bool:
         if not self.sql_connection:
@@ -81,7 +80,6 @@ class DatabricksConnector(DataLoader):
         except Exception as e:
             raise DatabaseError(f"Failed to load DataFrame to Databricks: {e}")
     async def _merge_delta_table(self, spark_df: DataFrame, table_name: str, merge_keys: List[str]) -> None:
-        
         if not merge_keys:
             raise DatabaseError("Merge keys must be specified for merge operation")
         try:
@@ -95,7 +93,6 @@ class DatabricksConnector(DataLoader):
         except Exception:
             spark_df.write.format("delta").saveAsTable(table_name)
     async def _sql_insert_dataframe(self, df: pd.DataFrame, table_name: str, mode: str) -> None:
-        
         cursor = self.sql_connection.cursor()
         try:
             columns = []
@@ -168,7 +165,6 @@ class DatabricksConnector(DataLoader):
         finally:
             cursor.close()
     async def execute_query(self, query: str, **kwargs) -> pd.DataFrame:
-        
         if not self.sql_connection:
             await self.connect()
         cursor = self.sql_connection.cursor()
@@ -187,12 +183,10 @@ class DatabricksConnector(DataLoader):
         if self.spark:
             self.spark.stop()
 class DatabricksMarketDataProcessor:
-    
     def __init__(self, config: Optional[Dict] = None):
         self.connector = DatabricksConnector(config)
         self.config = config or get_config().databricks
     async def create_market_data_lakehouse(self) -> bool:
-        
         bronze_tables = {
             'market_data_bronze': {
                 'symbol': 'STRING',
@@ -268,7 +262,6 @@ class DatabricksMarketDataProcessor:
                 success = False
         return success
     async def create_streaming_jobs(self) -> bool:
-        
         if not self.connector.spark:
             print("Spark session not available for streaming jobs")
             return False
@@ -321,7 +314,6 @@ class DatabricksMarketDataProcessor:
             print(f"Failed to create streaming jobs: {e}")
             return False
     async def create_ml_features(self) -> bool:
-        
         if not self.connector.spark:
             return False
         try:
@@ -358,7 +350,6 @@ class DatabricksMarketDataProcessor:
             print(f"Failed to create ML features: {e}")
             return False
     async def run_batch_processing_job(self, symbols: List[str], start_date: str, end_date: str) -> bool:
-        
         try:
             job_spec = {
                 "name": "QuantCore Market Data Processing",
@@ -391,8 +382,6 @@ class DatabricksMarketDataProcessor:
     async def close(self) -> None:
         await self.connector.close()
 def create_databricks_connector() -> DatabricksConnector:
-    
     return DatabricksConnector()
 def create_databricks_processor() -> DatabricksMarketDataProcessor:
-    
     return DatabricksMarketDataProcessor()
