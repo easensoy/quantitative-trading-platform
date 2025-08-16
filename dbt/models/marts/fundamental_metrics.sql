@@ -35,15 +35,15 @@ factset_fundamentals as (
         
         ff_sales as revenue,
         ff_net_inc as net_income,
-        null as debt_to_equity,  -- Need to calculate from components
+        null as debt_to_equity,
         ff_roa as roa,
         ff_roe as roe,
-        null as pe_ratio,  -- Calculate from price and EPS
-        null as price_to_book,  -- Calculate from price and book value
+        null as pe_ratio,
+        null as price_to_book,
         ff_cf_free as free_cash_flow,
-        null as ebitda,  -- Calculate from components
-        null as market_cap,  -- Calculate from shares and price
-        null as beta,  -- Not directly available
+        null as ebitda,
+        null as market_cap,
+        null as beta,
         'factset' as data_source,
         created_at,
         updated_at
@@ -67,7 +67,7 @@ refinitiv_fundamentals as (
         tr_roe as roe,
         tr_peratio as pe_ratio,
         tr_pricetobookvalue as price_to_book,
-        null as free_cash_flow,  -- Calculate from operating CF and capex
+        null as free_cash_flow,
         null as ebitda,
         tr_marketcap as market_cap,
         tr_beta as beta,
@@ -79,7 +79,6 @@ refinitiv_fundamentals as (
     where instrument is not null
 ),
 
--- Combine all fundamental data sources
 combined_fundamentals as (
     select * from bloomberg_fundamentals
     union all
@@ -88,11 +87,9 @@ combined_fundamentals as (
     select * from refinitiv_fundamentals
 ),
 
--- Calculate data quality and prioritize sources
 scored_fundamentals as (
     select 
         *,
-        -- Calculate completeness score
         (
             case when revenue is not null then 0.15 else 0 end +
             case when net_income is not null then 0.15 else 0 end +
@@ -105,8 +102,6 @@ scored_fundamentals as (
             case when market_cap is not null then 0.1 else 0 end +
             case when beta is not null then 0.05 else 0 end
         ) as completeness_score,
-        
-        -- Source preference ranking
         case data_source
             when 'bloomberg' then 1
             when 'factset' then 2
@@ -116,7 +111,6 @@ scored_fundamentals as (
     from combined_fundamentals
 ),
 
--- Deduplicate by selecting best source for each symbol
 deduplicated_fundamentals as (
     select 
         symbol,
@@ -144,7 +138,6 @@ deduplicated_fundamentals as (
     from scored_fundamentals
 ),
 
--- Calculate additional derived metrics
 enriched_fundamentals as (
     select 
         symbol,
@@ -159,8 +152,6 @@ enriched_fundamentals as (
         ebitda,
         market_cap,
         beta,
-        
-        -- Calculate additional metrics
         case 
             when revenue > 0 and net_income is not null then net_income / revenue
             else null
@@ -180,8 +171,6 @@ enriched_fundamentals as (
             when debt_to_equity is not null then 1 / (1 + debt_to_equity)
             else null
         end as equity_ratio,
-        
-        -- Quality scores
         case
             when revenue > 0 and net_income > 0 then 'profitable'
             when revenue > 0 and net_income <= 0 then 'unprofitable'
