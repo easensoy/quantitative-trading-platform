@@ -33,7 +33,6 @@ class RiskService(RiskServiceInterface, Injectable):
         self.risk_alerts: List[Dict] = []
         self.risk_callbacks: List[Callable] = []
         self.monitoring_active = False
-        
         self.risk_limits = {
             "max_portfolio_var": -50000,
             "max_position_concentration": 0.25,
@@ -41,13 +40,11 @@ class RiskService(RiskServiceInterface, Injectable):
             "max_daily_loss": -25000,
             "min_cash_ratio": 0.05
         }
-        
         asyncio.create_task(self.event_bus.subscribe("position_updated", self._handle_position_update))
         asyncio.create_task(self.event_bus.subscribe("order_submitted", self._handle_order_submission))
     
     async def validate_order(self, order: Order, portfolio: Portfolio) -> bool:
         is_valid = self.risk_manager.validate_order(order, portfolio)
-        
         if not is_valid:
             await self.event_bus.publish("risk_violation", {
                 "type": "order_validation_failed",
@@ -55,33 +52,27 @@ class RiskService(RiskServiceInterface, Injectable):
                 "symbol": order.instrument.symbol,
                 "timestamp": datetime.utcnow()
             })
-            
             await self._add_risk_alert({
                 "type": "order_rejected",
                 "message": f"Order {order.id} rejected by risk manager",
                 "severity": "warning",
                 "timestamp": datetime.utcnow()
             })
-        
         return is_valid
     
     async def calculate_portfolio_risk(self, portfolio: Portfolio, market_data: Dict[str, MarketData]) -> Dict:
         base_metrics = self.risk_manager.calculate_risk_metrics(portfolio)
-        
         enhanced_metrics = await self._calculate_enhanced_metrics(portfolio, market_data)
-        
         risk_metrics = {
             **base_metrics,
             **enhanced_metrics,
             "timestamp": datetime.utcnow(),
             "portfolio_id": portfolio.id
         }
-        
         await self.event_bus.publish("risk_metrics_calculated", {
             "metrics": risk_metrics,
             "portfolio_id": portfolio.id
         })
-        
         return risk_metrics
     
     async def monitor_risk_limits(self, portfolio: Portfolio) -> List[Dict]:
@@ -166,19 +157,15 @@ class RiskService(RiskServiceInterface, Injectable):
         
         sector_exposure = {}
         total_value = portfolio.cash + portfolio.total_notional
-        
         for position in portfolio.positions.values():
             sector = getattr(position.instrument, 'sector', 'Unknown')
             symbol = position.instrument.symbol
-            
             if symbol in market_data:
                 current_price = market_data[symbol].last or 0
                 position_value = abs(position.quantity * current_price)
-                
                 if sector not in sector_exposure:
                     sector_exposure[sector] = 0
                 sector_exposure[sector] += position_value / total_value if total_value > 0 else 0
-        
         returns_data = []
         for symbol, position in portfolio.positions.items():
             if symbol in market_data:
@@ -186,11 +173,9 @@ class RiskService(RiskServiceInterface, Injectable):
                 avg_price = position.avg_price
                 if avg_price > 0:
                     returns_data.append((current_price - avg_price) / avg_price)
-        
         correlation_risk = 0.0
         if len(returns_data) > 1:
             correlation_risk = np.corrcoef(returns_data)[0, 1] if len(returns_data) == 2 else np.mean(np.corrcoef(returns_data))
-        
         return {
             "sector_concentration": sector_exposure,
             "correlation_risk": correlation_risk if not np.isnan(correlation_risk) else 0.0,
@@ -200,12 +185,9 @@ class RiskService(RiskServiceInterface, Injectable):
     
     async def _add_risk_alert(self, alert: Dict) -> None:
         self.risk_alerts.append(alert)
-        
         if len(self.risk_alerts) > 100:
             self.risk_alerts = self.risk_alerts[-50:]
-        
         await self.event_bus.publish("risk_alert", alert)
-        
         for callback in self.risk_callbacks:
             try:
                 if asyncio.iscoroutinefunction(callback):
