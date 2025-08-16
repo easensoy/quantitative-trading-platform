@@ -12,7 +12,6 @@ factset_data as (
     select * from {{ ref('stg_factset_equity') }}
 ),
 
--- Combine all data sources
 combined_data as (
     select * from bloomberg_data
     union all
@@ -20,12 +19,9 @@ combined_data as (
     union all
     select * from factset_data
 ),
-
--- Calculate data quality scores for each record
 scored_data as (
     select 
         *,
-        -- Calculate completeness score (0-1)
         (
             case when open_price is not null then 0.2 else 0 end +
             case when high_price is not null then 0.2 else 0 end +
@@ -33,8 +29,6 @@ scored_data as (
             case when close_price is not null then 0.2 else 0 end +
             case when volume is not null then 0.2 else 0 end
         ) as completeness_score,
-        
-        -- Calculate consistency score
         case 
             when high_price >= low_price and high_price >= close_price and high_price >= open_price 
                  and low_price <= close_price and low_price <= open_price then 1.0
@@ -44,7 +38,6 @@ scored_data as (
     from combined_data
 ),
 
--- Rank data sources by quality for deduplication
 ranked_data as (
     select 
         *,
@@ -62,7 +55,6 @@ ranked_data as (
     from scored_data
 ),
 
--- Select best data source for each symbol-date
 deduplicated_data as (
     select 
         symbol,
@@ -83,12 +75,9 @@ deduplicated_data as (
     where source_rank = 1
 ),
 
--- Calculate technical indicators
 enriched_data as (
     select 
         *,
-        
-        -- Simple moving averages
         avg(close_price) over (
             partition by symbol 
             order by trade_date 
@@ -100,17 +89,11 @@ enriched_data as (
             order by trade_date 
             rows between 49 preceding and current row
         ) as sma_50,
-        
-        -- Exponential moving average (approximation)
-        -- EMA = (Close - Previous_EMA) * (2/(N+1)) + Previous_EMA
-        -- This is a simplified calculation
         avg(close_price) over (
             partition by symbol 
             order by trade_date 
             rows between 19 preceding and current row
         ) as ema_20,
-        
-        -- Bollinger Bands
         avg(close_price) over (
             partition by symbol 
             order by trade_date 
@@ -130,8 +113,6 @@ enriched_data as (
             order by trade_date 
             rows between 19 preceding and current row
         ) as bollinger_lower,
-        
-        -- Volume ratio (current volume vs 20-day average)
         case 
             when avg(volume) over (
                 partition by symbol 
@@ -145,8 +126,6 @@ enriched_data as (
                 )
             else null
         end as volume_ratio,
-        
-        -- Price momentum (20-day)
         case 
             when lag(close_price, 20) over (partition by symbol order by trade_date) > 0 then
                 (close_price - lag(close_price, 20) over (partition by symbol order by trade_date)) /
