@@ -1,0 +1,10 @@
+# Complete local development environment: trading engine + Django API + test tools.
+# Requires Python 3.11: several pins (numpy 1.24.3, scikit-learn 1.3.0) have no wheels
+# for Python 3.12 or later.
+#
+#   python -m pip install -r requirements_dev.txt
+#
+# requirements.txt (Airflow, warehouse connectors, AI tooling) is intentionally not
+# included; it is the legacy stack and does not resolve as pinned (see README.md).
+-r requirements_engine.txt
+-r requirements_django.txt
