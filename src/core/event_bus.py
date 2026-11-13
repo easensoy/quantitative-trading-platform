@@ -1,5 +1,6 @@
 import asyncio
-from typing import Dict, List, Callable, Any
+import logging
+from typing import Dict, List, Callable, Any, Optional
 from collections import defaultdict
 import json
 import redis.asyncio as redis
@@ -8,20 +9,25 @@ from dataclasses import asdict
 from src.core.models import EventBus
 from src.core.config import get_config
 
+logger = logging.getLogger(__name__)
+
 
 class InMemoryEventBus(EventBus):
+    """Process-local bus. Handlers run in subscription order before publish() returns."""
+
     def __init__(self):
         self._subscribers: Dict[str, List[Callable]] = defaultdict(list)
         
     async def publish(self, event_type: str, data: Dict) -> None:
-        for callback in self._subscribers[event_type]:
+        # Iterate over a copy so handlers may subscribe further callbacks while dispatching.
+        for callback in list(self._subscribers[event_type]):
             try:
                 if asyncio.iscoroutinefunction(callback):
                     await callback(data)
                 else:
                     callback(data)
-            except Exception as e:
-                print(f"Event handler error: {e}")
+            except Exception:
+                logger.exception("Event handler error for %r", event_type)
     
     async def subscribe(self, event_type: str, callback: Callable) -> None:
         self._subscribers[event_type].append(callback)
@@ -92,8 +98,8 @@ class RedisEventBus(EventBus):
         return serialized
 
 
-def create_event_bus() -> EventBus:
-    config = get_config()
+def create_event_bus(config: Optional[Dict] = None) -> EventBus:
+    config = config if config is not None else get_config()
     if config.get("event_bus", {}).get("type") == "redis":
         redis_url = config.get("event_bus", {}).get("url", "redis://localhost:6379")
         return RedisEventBus(redis_url)
