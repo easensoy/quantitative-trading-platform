@@ -1,0 +1,13 @@
+# Trading engine: src/, main.py and run.py (simulated market data, execution,
+# portfolio, risk, backtesting). Requires Python 3.11; versions match requirements.txt.
+numpy==1.24.3
+pandas==2.1.0
+pydantic==2.3.0
+# src/core/event_bus.py imports redis.asyncio even when the in-memory bus is used.
+redis==4.6.0
+scipy==1.11.2
+scikit-learn==1.3.0
+
+# Tests
+pytest==7.4.2
+pytest-asyncio==0.21.1
