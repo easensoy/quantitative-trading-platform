@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
+import math
 from decimal import Decimal
 from enum import Enum
 from typing import Dict, List, Optional, Union
@@ -129,6 +130,7 @@ class Fill:
     venue: Venue
     trade_id: str
     commission: float = 0.0
+    strategy_id: Optional[str] = None
     
     @property
     def notional(self) -> float:
@@ -174,32 +176,45 @@ class Portfolio(BaseModel):
         return self.positions.get(symbol)
     
     def update_position(self, fill: Fill) -> None:
+        """Apply a fill to positions only. Use apply_fill() to update cash as well."""
         symbol = fill.instrument.symbol
         current_pos = self.positions.get(symbol)
+        fill_qty = fill.quantity if fill.side == OrderSide.BUY else -fill.quantity
         
         if current_pos is None:
-            new_qty = fill.quantity if fill.side == OrderSide.BUY else -fill.quantity
             self.positions[symbol] = Position(
                 instrument=fill.instrument,
-                quantity=new_qty,
+                quantity=fill_qty,
                 avg_price=fill.price,
                 strategy_id=None
             )
+            return
+
+        new_qty = current_pos.quantity + fill_qty
+        if new_qty == 0:
+            del self.positions[symbol]
+            return
+
+        if (current_pos.quantity > 0) == (fill_qty > 0):
+            # Adding to the position: volume-weighted average cost.
+            total_cost = (current_pos.quantity * current_pos.avg_price) + (fill_qty * fill.price)
+            current_pos.avg_price = total_cost / new_qty
+        elif (current_pos.quantity > 0) != (new_qty > 0):
+            # The fill closed the position and opened one on the other side at the fill price.
+            current_pos.avg_price = fill.price
+        # Otherwise the fill only reduced the position, so its cost basis is unchanged.
+        current_pos.quantity = new_qty
+
+    def apply_fill(self, fill: Fill) -> None:
+        """Apply a fill to positions and cash.
+
+        Buys pay notional plus commission; sells receive notional less commission.
+        """
+        self.update_position(fill)
+        if fill.side == OrderSide.BUY:
+            self.cash -= fill.notional + fill.commission
         else:
-            fill_qty = fill.quantity if fill.side == OrderSide.BUY else -fill.quantity
-            new_qty = current_pos.quantity + fill_qty
-            
-            if new_qty == 0:
-                del self.positions[symbol]
-            else:
-                if (current_pos.quantity > 0 and fill_qty > 0) or (current_pos.quantity < 0 and fill_qty < 0):
-                    total_cost = (current_pos.quantity * current_pos.avg_price) + (fill_qty * fill.price)
-                    new_avg_price = total_cost / new_qty
-                else:
-                    new_avg_price = fill.price
-                
-                current_pos.quantity = new_qty
-                current_pos.avg_price = new_avg_price
+            self.cash += fill.notional - fill.commission
     
     @property
     def total_notional(self) -> float:
@@ -292,7 +307,9 @@ class PnLAttribution:
     attribution_factors: Dict[str, float] = field(default_factory=dict)
 
 
-@dataclass(frozen=True)
+# kw_only: these subclasses add required fields after Instrument's defaulted fields,
+# which dataclasses only allow for keyword-only fields.
+@dataclass(frozen=True, kw_only=True)
 class FixedIncomeInstrument(Instrument):
     maturity_date: datetime
     coupon_rate: float
@@ -313,7 +330,7 @@ class FixedIncomeInstrument(Instrument):
         return self.asset_type == AssetType.GOVERNMENT_BOND
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class CommodityInstrument(Instrument):
     contract_month: str
     delivery_date: datetime
@@ -408,12 +425,19 @@ class CommodityFuturesPrice:
 
 class FixedIncomePricer:
     @staticmethod
+    def _remaining_periods(bond: FixedIncomeInstrument) -> int:
+        # Count every coupon still to be paid, including the next (partial) period.
+        # Truncating with int() dropped one coupon whenever maturity was not an exact
+        # multiple of the coupon period (1825 days = 4.9966 years gave 9 periods, not 10).
+        return max(0, math.ceil(bond.time_to_maturity * bond.payment_frequency - 1e-9))
+
+    @staticmethod
     def calculate_bond_price(bond: FixedIncomeInstrument, yield_rate: float) -> float:
         if bond.time_to_maturity <= 0:
             return bond.face_value
         
         coupon_payment = bond.face_value * bond.coupon_rate / bond.payment_frequency
-        periods = int(bond.time_to_maturity * bond.payment_frequency)
+        periods = FixedIncomePricer._remaining_periods(bond)
         
         pv_coupons = sum(
             coupon_payment / (1 + yield_rate / bond.payment_frequency) ** i
@@ -427,7 +451,7 @@ class FixedIncomePricer:
     @staticmethod
     def calculate_duration(bond: FixedIncomeInstrument, yield_rate: float) -> float:
         coupon_payment = bond.face_value * bond.coupon_rate / bond.payment_frequency
-        periods = int(bond.time_to_maturity * bond.payment_frequency)
+        periods = FixedIncomePricer._remaining_periods(bond)
         
         weighted_cf = sum(
             (i / bond.payment_frequency) * coupon_payment / (1 + yield_rate / bond.payment_frequency) ** i
@@ -443,7 +467,7 @@ class FixedIncomePricer:
     @staticmethod
     def calculate_convexity(bond: FixedIncomeInstrument, yield_rate: float) -> float:
         coupon_payment = bond.face_value * bond.coupon_rate / bond.payment_frequency
-        periods = int(bond.time_to_maturity * bond.payment_frequency)
+        periods = FixedIncomePricer._remaining_periods(bond)
         
         weighted_cf = sum(
             i * (i + 1) * coupon_payment / (1 + yield_rate / bond.payment_frequency) ** (i + 2)
