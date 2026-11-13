@@ -33,6 +33,7 @@ class RiskService(RiskServiceInterface, Injectable):
         self.risk_alerts: List[Dict] = []
         self.risk_callbacks: List[Callable] = []
         self.monitoring_active = False
+        self._monitoring_task: Optional[asyncio.Task] = None
         self.risk_limits = {
             "max_portfolio_var": -50000,
             "max_position_concentration": 0.25,
@@ -40,8 +41,15 @@ class RiskService(RiskServiceInterface, Injectable):
             "max_daily_loss": -25000,
             "min_cash_ratio": 0.05
         }
-        asyncio.create_task(self.event_bus.subscribe("position_updated", self._handle_position_update))
-        asyncio.create_task(self.event_bus.subscribe("order_submitted", self._handle_order_submission))
+        self._initialized = False
+
+    async def initialize(self) -> None:
+        """Subscribe to the event bus. Safe to call more than once."""
+        if self._initialized:
+            return
+        await self.event_bus.subscribe("position_updated", self._handle_position_update)
+        await self.event_bus.subscribe("order_submitted", self._handle_order_submission)
+        self._initialized = True
     
     async def validate_order(self, order: Order, portfolio: Portfolio) -> bool:
         is_valid = self.risk_manager.validate_order(order, portfolio)
@@ -52,9 +60,11 @@ class RiskService(RiskServiceInterface, Injectable):
                 "symbol": order.instrument.symbol,
                 "timestamp": datetime.utcnow()
             })
+            # New orders have no id until the execution engine assigns one.
+            description = f"{order.side.value} {order.quantity} {order.instrument.symbol}"
             await self._add_risk_alert({
                 "type": "order_rejected",
-                "message": f"Order {order.id} rejected by risk manager",
+                "message": f"Order {order.id or '(unsubmitted)'} ({description}) rejected by risk manager",
                 "severity": "warning",
                 "timestamp": datetime.utcnow()
             })
@@ -125,10 +135,17 @@ class RiskService(RiskServiceInterface, Injectable):
     async def start_monitoring(self, check_interval: int = 30) -> None:
         if not self.monitoring_active:
             self.monitoring_active = True
-            asyncio.create_task(self._monitoring_loop(check_interval))
+            self._monitoring_task = asyncio.create_task(self._monitoring_loop(check_interval))
     
     async def stop_monitoring(self) -> None:
         self.monitoring_active = False
+        if self._monitoring_task is not None:
+            self._monitoring_task.cancel()
+            try:
+                await self._monitoring_task
+            except asyncio.CancelledError:
+                pass
+            self._monitoring_task = None
     
     def add_risk_callback(self, callback: Callable) -> None:
         self.risk_callbacks.append(callback)
@@ -198,10 +215,11 @@ class RiskService(RiskServiceInterface, Injectable):
                 print(f"Risk callback error: {e}")
     
     async def _handle_position_update(self, data: Dict) -> None:
-        from src.services.portfolio_service import PortfolioService
-        portfolio_service = data.get("portfolio_service")
-        if portfolio_service:
-            portfolio = await portfolio_service.get_portfolio()
+        # PortfolioService includes the portfolio in "position_updated" events.
+        portfolio = data.get("portfolio")
+        if portfolio is None and data.get("portfolio_service"):
+            portfolio = await data["portfolio_service"].get_portfolio()
+        if portfolio is not None:
             await self.monitor_risk_limits(portfolio)
     
     async def _handle_order_submission(self, data: Dict) -> None:
@@ -219,12 +237,20 @@ class RiskService(RiskServiceInterface, Injectable):
 
 class RiskFactory:
     @staticmethod
-    def create_manager(manager_type: str = "basic") -> RiskManager:
-        if manager_type == "basic":
-            return BasicRiskManager()
-        return BasicRiskManager()
+    def create_manager(
+        manager_type: str = "basic",
+        config: Optional[Dict] = None,
+        price_source: Optional[Callable] = None,
+    ) -> RiskManager:
+        # "basic" is the only risk manager implemented; any other value falls back to it.
+        return BasicRiskManager(config=config, price_source=price_source)
     
     @staticmethod
-    def create_service(event_bus: EventBus, manager_type: str = "basic") -> RiskService:
-        manager = RiskFactory.create_manager(manager_type)
+    def create_service(
+        event_bus: EventBus,
+        manager_type: str = "basic",
+        config: Optional[Dict] = None,
+        price_source: Optional[Callable] = None,
+    ) -> RiskService:
+        manager = RiskFactory.create_manager(manager_type, config=config, price_source=price_source)
         return RiskService(event_bus, manager)
