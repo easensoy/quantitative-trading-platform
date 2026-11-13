@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Callable, Any
 import pandas as pd
@@ -68,14 +68,22 @@ class SimulatedBroker:
         self.pending_orders[order.id] = order
         return order.id
     
-    def process_orders(self, market_data: SimulatedMarketData) -> List[Fill]:
+    def process_orders(self, market_data: SimulatedMarketData, symbol: Optional[str] = None) -> List[Fill]:
+        """Try to fill pending orders against one bar.
+
+        Pass the bar's symbol so only that instrument's orders are matched against it;
+        without it, every pending order is priced from this bar (single-symbol use only).
+        """
         fills = []
         orders_to_remove = []
         
         for order_id, order in self.pending_orders.items():
+            if symbol is not None and order.instrument.symbol != symbol:
+                continue
             fill = self._try_fill_order(order, market_data)
             if fill:
                 fills.append(fill)
+                self.filled_orders.append(fill)
                 order.status = OrderStatus.FILLED
                 order.filled_quantity = order.quantity
                 order.avg_fill_price = fill.price
@@ -195,15 +203,26 @@ class PerformanceAnalyzer:
 
 
 class BacktestEngine:
+    """Bar-by-bar simulation.
+
+    Orders a strategy returns at bar t are filled by SimulatedBroker at bar t+1 for the
+    same symbol (close price adjusted by slippage; limit orders only when marketable).
+    Fills update both positions and cash, commissions included. No margin or risk
+    checks are applied, so a strategy can spend more cash than it has.
+    """
+
     def __init__(self, config: BacktestConfig):
         self.config = config
-        self.broker = SimulatedBroker(config)
+        self.performance_analyzer = PerformanceAnalyzer()
+        self._reset()
+
+    def _reset(self) -> None:
+        self.broker = SimulatedBroker(self.config)
         self.portfolio = Portfolio(
             id="backtest_portfolio",
             name="Backtest Portfolio",
-            cash=config.initial_capital
+            cash=self.config.initial_capital
         )
-        self.performance_analyzer = PerformanceAnalyzer()
         self.equity_curve: List[float] = []
         self.timestamps: List[datetime] = []
         self.trades: List[Fill] = []
@@ -217,6 +236,9 @@ class BacktestEngine:
     ) -> BacktestResult:
         if not market_data:
             raise BacktestError("No market data provided")
+
+        # Each run starts from initial capital, so an engine can be reused.
+        self._reset()
         
         all_timestamps = set()
         for df in market_data.values():
@@ -259,12 +281,14 @@ class BacktestEngine:
                 )
         
         fills = []
-        for market_data_point in current_market_data.values():
-            batch_fills = self.broker.process_orders(market_data_point)
+        for symbol, market_data_point in current_market_data.items():
+            batch_fills = self.broker.process_orders(market_data_point, symbol=symbol)
             fills.extend(batch_fills)
         
         for fill in fills:
-            self.portfolio.update_position(fill)
+            # apply_fill moves cash as well as positions; position-only updates made
+            # every purchase look like a gain in the equity curve.
+            self.portfolio.apply_fill(fill)
             self.trades.append(fill)
         
         try:
@@ -282,7 +306,8 @@ class BacktestEngine:
         self.equity_curve.append(portfolio_value)
         self.timestamps.append(timestamp)
         
-        self.positions_history.extend(list(self.portfolio.positions.values()))
+        # Copies, because positions are mutated in place by later fills.
+        self.positions_history.extend(replace(pos) for pos in self.portfolio.positions.values())
     
     def _calculate_portfolio_value(self, market_data: Dict[str, SimulatedMarketData]) -> float:
         total_value = self.portfolio.cash
