@@ -26,6 +26,8 @@ DJANGO_APPS = [
 
 THIRD_PARTY_APPS = [
     'rest_framework',
+    # Token model and migrations for TokenAuthentication (enabled in REST_FRAMEWORK below).
+    'rest_framework.authtoken',
     'corsheaders',
     'channels',
     'drf_spectacular',
@@ -33,15 +35,13 @@ THIRD_PARTY_APPS = [
     'django_celery_results',
 ]
 
+# Only apps that exist under apps/. The settings previously also listed apps.portfolio,
+# apps.risk, apps.strategies, apps.backtesting, apps.ml and apps.monitoring, which have
+# no code, so Django could not start. Their logic lives in the trading engine under
+# src/ (src/portfolio, src/backtesting, src/ml, src/services/risk_service.py, ...).
 LOCAL_APPS = [
     'apps.trading',
     'apps.market_data',
-    'apps.portfolio',
-    'apps.risk',
-    'apps.strategies',
-    'apps.backtesting',
-    'apps.ml',
-    'apps.monitoring',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -78,19 +78,25 @@ TEMPLATES = [
 WSGI_APPLICATION = 'quantcore.wsgi.application'
 ASGI_APPLICATION = 'quantcore.asgi.application'
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': env('DB_NAME', default='quantcore'),
-        'USER': env('DB_USER', default='postgres'),
-        'PASSWORD': env('DB_PASSWORD', default=''),
-        'HOST': env('DB_HOST', default='localhost'),
-        'PORT': env('DB_PORT', default='5432'),
-        'OPTIONS': {
-            'MAX_CONNS': 20,
-        },
+# PostgreSQL is the configured database. DATABASE_URL, when set, replaces it entirely,
+# e.g. DATABASE_URL=sqlite:///db.sqlite3 for a local run without PostgreSQL.
+if env('DATABASE_URL', default=''):
+    DATABASES = {'default': env.db('DATABASE_URL')}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': env('DB_NAME', default='quantcore'),
+            'USER': env('DB_USER', default='postgres'),
+            'PASSWORD': env('DB_PASSWORD', default=''),
+            'HOST': env('DB_HOST', default='localhost'),
+            'PORT': env('DB_PORT', default='5432'),
+            # Django 4.2 has no connection pool; persistent connections are the closest
+            # option. The previous OPTIONS={'MAX_CONNS': 20} is not a libpq connection
+            # parameter, so psycopg2 rejected every connection attempt.
+            'CONN_MAX_AGE': env.int('DB_CONN_MAX_AGE', default=0),
+        }
     }
-}
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -166,15 +172,29 @@ CHANNEL_LAYERS = {
     },
 }
 
-CACHES = {
-    'default': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': env('REDIS_URL', default='redis://localhost:6379/2'),
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+# Redis (django-redis) is the configured cache. DRF throttling reads the cache on every
+# API request, so the API needs a reachable Redis. CACHE_BACKEND=locmem switches to a
+# per-process memory cache for development without Redis.
+if env('CACHE_BACKEND', default='redis') == 'locmem':
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
         }
     }
-}
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': env('REDIS_URL', default='redis://localhost:6379/2'),
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            }
+        }
+    }
+
+# The file handler needs its directory to exist before logging is configured.
+LOG_DIR = Path(env('LOG_DIR', default=str(BASE_DIR / 'logs')))
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 LOGGING = {
     'version': 1,
@@ -192,12 +212,18 @@ LOGGING = {
         },
         'file': {
             'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'quantcore.log',
+            'filename': LOG_DIR / 'quantcore.log',
             'formatter': 'verbose',
         },
     },
     'loggers': {
         'quantcore': {
+            'handlers': ['console', 'file'],
+            'level': env('LOG_LEVEL', default='INFO'),
+            'propagate': True,
+        },
+        # Loggers in apps/ (e.g. apps.market_data.tasks) are named after their modules.
+        'apps': {
             'handlers': ['console', 'file'],
             'level': env('LOG_LEVEL', default='INFO'),
             'propagate': True,
