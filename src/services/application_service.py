@@ -36,8 +36,8 @@ class ApplicationServiceInterface(ABC):
 
 @service("application_service")
 class TradingApplicationService(ApplicationServiceInterface, Injectable):
-    def __init__(self):
-        self.config = get_config()
+    def __init__(self, config: Optional[Dict] = None):
+        self.config = config if config is not None else get_config()
         self.container = ServiceRegistry.get_container()
         self.event_bus: Optional[EventBus] = None
         
@@ -49,6 +49,8 @@ class TradingApplicationService(ApplicationServiceInterface, Injectable):
         
         self.running = False
         self.startup_time: Optional[datetime] = None
+        self.status_interval = float(self.config.get("status_interval", 10.0))
+        self._stop_event: Optional[asyncio.Event] = None
         
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger(__name__)
@@ -57,18 +59,30 @@ class TradingApplicationService(ApplicationServiceInterface, Injectable):
         self.logger.info("Initializing Trading Application...")
         
         from src.core.event_bus import create_event_bus
-        self.event_bus = create_event_bus()
+        self.event_bus = create_event_bus(self.config)
         self.container.register_singleton("event_bus", self.event_bus)
+
+        market_data_config = self.config.get("market_data", {})
+        execution_config = self.config.get("execution", {})
         
         self.market_data_service = MarketDataFactory.create_service(
             self.event_bus, 
-            self.config.get("market_data", {}).get("provider", "simulated")
+            market_data_config.get("provider", "simulated"),
+            poll_interval=market_data_config.get("poll_interval", 1.0),
+            seed=market_data_config.get("seed"),
         )
         self.container.register_singleton("market_data_service", self.market_data_service)
         
+        # Execution and risk price market orders from the latest streamed quote.
+        price_source = self.market_data_service.get_latest_price
+
         self.order_execution_service = OrderExecutionFactory.create_service(
             self.event_bus,
-            "basic"
+            "basic",
+            price_source=price_source,
+            commission_rate=execution_config.get("commission", 0.001),
+            slippage=execution_config.get("slippage", 0.001),
+            fill_delay=tuple(execution_config.get("fill_delay", (0.1, 0.5))),
         )
         self.container.register_singleton("order_execution_service", self.order_execution_service)
         
@@ -79,11 +93,24 @@ class TradingApplicationService(ApplicationServiceInterface, Injectable):
         )
         self.container.register_singleton("portfolio_service", self.portfolio_service)
         
-        self.risk_service = RiskFactory.create_service(self.event_bus, "basic")
+        self.risk_service = RiskFactory.create_service(
+            self.event_bus, "basic", config=self.config, price_source=price_source
+        )
         self.container.register_singleton("risk_service", self.risk_service)
         
         self.strategy_service = StrategyFactory.create_service(self.event_bus)
         self.container.register_singleton("strategy_service", self.strategy_service)
+
+        # Subscribe every service before any event is published. Subscription order is
+        # dispatch order: market data is cached before portfolio and strategies see it.
+        for domain_service in (
+            self.market_data_service,
+            self.order_execution_service,
+            self.portfolio_service,
+            self.risk_service,
+            self.strategy_service,
+        ):
+            await domain_service.initialize()
         
         await self._setup_service_interactions()
         
@@ -96,6 +123,7 @@ class TradingApplicationService(ApplicationServiceInterface, Injectable):
         self.logger.info("Starting Trading Application...")
         self.startup_time = datetime.utcnow()
         self.running = True
+        self._stop_event = asyncio.Event()
         
         await self.market_data_service.start_streaming()
         await self.risk_service.start_monitoring(30)
@@ -110,6 +138,8 @@ class TradingApplicationService(ApplicationServiceInterface, Injectable):
     async def stop(self) -> None:
         self.logger.info("Stopping Trading Application...")
         self.running = False
+        if self._stop_event is not None:
+            self._stop_event.set()
         
         if self.market_data_service:
             await self.market_data_service.stop_streaming()
@@ -204,16 +234,26 @@ class TradingApplicationService(ApplicationServiceInterface, Injectable):
         self.logger.critical("Emergency stop completed")
     
     async def _setup_service_interactions(self) -> None:
+        # Fills reach the portfolio through the order execution service.
         self.order_execution_service.add_fill_callback(self.portfolio_service.update_position)
         
-        async def risk_validation_callback(order, portfolio):
+        # Every order, including strategy-generated ones, is validated against the current
+        # portfolio before it reaches the execution engine.
+        async def risk_validation_callback(order):
+            portfolio = await self.portfolio_service.get_portfolio()
             return await self.risk_service.validate_order(order, portfolio)
+
+        self.order_execution_service.add_pre_trade_check(risk_validation_callback)
         
         self.portfolio_service.add_value_callback(self._handle_portfolio_value_change)
         self.risk_service.add_risk_callback(self._handle_risk_alert)
         self.strategy_service.add_strategy_callback(self._handle_strategy_event)
     
     async def _setup_default_instruments(self) -> None:
+        if self.market_data_service.subscribed_instruments:
+            self.logger.info("Instruments already configured; skipping default instruments")
+            return
+
         default_instruments = [
             Instrument("AAPL", AssetType.EQUITY, "NASDAQ"),
             Instrument("GOOGL", AssetType.EQUITY, "NASDAQ"), 
@@ -227,6 +267,12 @@ class TradingApplicationService(ApplicationServiceInterface, Injectable):
     
     async def _setup_default_strategies(self) -> None:
         from src.core.models import Order, OrderSide, OrderType
+
+        # The defaults reuse ids such as "momentum_001"; registering them over strategies
+        # the caller already added would silently replace the caller's handlers.
+        if self.strategy_service.strategies:
+            self.logger.info("Strategies already registered; skipping default strategies")
+            return
         
         async def momentum_handler(market_data, portfolio):
             orders = []
@@ -259,20 +305,29 @@ class TradingApplicationService(ApplicationServiceInterface, Injectable):
     async def _run_main_loop(self) -> None:
         while self.running:
             try:
-                await asyncio.sleep(10)
-                
-                system_status = await self.get_system_status()
-                self.logger.info(f"System Status: Portfolio Value=${system_status['portfolio']['current_value']:,.2f}")
-                
-            except KeyboardInterrupt:
-                await self.stop()
+                # Wake on stop() immediately rather than after a full status interval.
+                await asyncio.wait_for(self._stop_event.wait(), timeout=self.status_interval)
                 break
+            except asyncio.TimeoutError:
+                pass
+                
+            try:
+                system_status = await self.get_system_status()
+                if system_status.get("status") != "running":
+                    continue
+                portfolio = system_status["portfolio"]
+                orders = system_status["orders"]
+                self.logger.info(
+                    f"System Status: Portfolio Value=${portfolio['current_value']:,.2f} "
+                    f"Cash=${portfolio['cash']:,.2f} Positions={portfolio['positions_count']} "
+                    f"Orders filled={orders['filled_orders']} rejected={orders['rejected_orders']}"
+                )
             except Exception as e:
                 self.logger.error(f"Main loop error: {e}")
-                await asyncio.sleep(5)
     
     async def _handle_portfolio_value_change(self, new_value: float, market_data: Dict) -> None:
-        if new_value < 900000:
+        initial_capital = self.config.get("initial_capital", 1000000)
+        if new_value < 0.9 * initial_capital:
             self.logger.warning(f"Portfolio value dropped to ${new_value:,.2f}")
     
     async def _handle_risk_alert(self, alert: Dict) -> None:
