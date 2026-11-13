@@ -34,9 +34,15 @@ class StrategyService(StrategyServiceInterface, Injectable):
         self.strategy_handlers: Dict[str, Callable] = {}
         self.strategy_performance: Dict[str, Dict] = {}
         self.strategy_callbacks: List[Callable] = []
+        self._initialized = False
         
-        asyncio.create_task(self.event_bus.subscribe("market_data", self._handle_market_data))
-        asyncio.create_task(self.event_bus.subscribe("position_updated", self._handle_position_update))
+    async def initialize(self) -> None:
+        """Subscribe to the event bus. Safe to call more than once."""
+        if self._initialized:
+            return
+        await self.event_bus.subscribe("market_data", self._handle_market_data)
+        await self.event_bus.subscribe("position_updated", self._handle_position_update)
+        self._initialized = True
     
     async def register_strategy(self, strategy: Strategy, handler: Callable) -> None:
         self.strategies[strategy.id] = strategy
@@ -199,6 +205,7 @@ class StrategyService(StrategyServiceInterface, Injectable):
                     orders = await self.execute_strategy(strategy_id, market_data, portfolio)
                     
                     if orders:
+                        # submit_order runs the pre-trade risk checks the application wires in.
                         order_execution_service = container.get("order_execution_service")
                         for order in orders:
                             await order_execution_service.submit_order(order)
