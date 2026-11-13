@@ -21,7 +21,7 @@ def fetch_market_data_task(self, symbols: List[str] = None, provider: str = 'yfi
         from asgiref.sync import sync_to_async
         
         async def _fetch_data():
-            service = MarketDataService()
+            service = await MarketDataService.create()
             
             # Get symbols to fetch
             if not symbols:
@@ -83,7 +83,7 @@ def calculate_technical_indicators_task(self, symbols: List[str] = None):
         from asgiref.sync import sync_to_async
         
         async def _calculate_indicators():
-            service = MarketDataService()
+            service = await MarketDataService.create()
             
             # Get instruments
             if symbols:
@@ -139,7 +139,7 @@ def calculate_risk_metrics_task(self, symbols: List[str] = None, force_recalcula
         from .models import RiskMetrics
         
         async def _calculate_risk_metrics():
-            service = MarketDataService()
+            service = await MarketDataService.create()
             
             # Get instruments
             if symbols:
@@ -215,7 +215,7 @@ def data_quality_check_task(self, provider_name: str = None):
         from asgiref.sync import sync_to_async
         
         async def _run_quality_checks():
-            service = MarketDataService()
+            service = await MarketDataService.create()
             
             # Get providers to check
             if provider_name:
