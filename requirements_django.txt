@@ -4,6 +4,9 @@ django-cors-headers==4.3.1
 django-environ==0.11.2
 psycopg2-binary==2.9.7
 celery==5.3.4
+# Pinned with celery: celery accepts any kombu <6, and kombu 5.7 refuses redis-py
+# older than 6.1 at runtime, so the worker could not use the pinned redis==4.6.0.
+kombu==5.3.4
 redis==4.6.0
 channels==4.0.0
 channels-redis==4.1.0
@@ -34,6 +37,8 @@ black==23.7.0
 flake8==6.1.0
 
 # Database and caching
+# django-redis provides the cache backend configured in quantcore/settings.py.
+django-redis==5.4.0
 django-cache-machine==1.2.0
 django-debug-toolbar==4.2.0
 
@@ -45,4 +50,6 @@ django-celery-beat==2.5.0
 django-celery-results==2.5.1
 
 # Financial calculations
-QuantLib-Python==1.32
+# The QuantLib wheels are published as "QuantLib" (as in requirements.txt and
+# pyproject.toml); "QuantLib-Python" stopped at 1.18, so ==1.32 cannot be installed.
+QuantLib==1.32
