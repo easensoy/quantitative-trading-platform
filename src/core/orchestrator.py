@@ -59,13 +59,12 @@ class TradingOrchestrator(Injectable):
         return await self.application_service.get_portfolio_summary()
     
     async def submit_order(self, order: Order) -> Optional[str]:
+        """Submit an order; returns None if the pre-trade risk check rejects it."""
         if not self.order_execution_service:
             return None
-        
-        portfolio = await self.portfolio_service.get_portfolio()
-        if await self.risk_service.validate_order(order, portfolio):
-            return await self.order_execution_service.submit_order(order)
-        return None
+        # The application wires RiskService.validate_order into OrderExecutionService as a
+        # pre-trade check, so orchestrator and strategy orders pass through the same gate.
+        return await self.order_execution_service.submit_order(order)
     
     async def cancel_order(self, order_id: str) -> bool:
         if not self.order_execution_service:
