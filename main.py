@@ -1,12 +1,40 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List
+from typing import Awaitable, Callable, Dict, List, Optional
 
 from src.core.orchestrator import TradingOrchestrator
 from src.core.models import Instrument, AssetType, Strategy, Order, OrderSide, OrderType
 from src.core.config import get_config
-from src.services.application_service import ApplicationFactory
+from src.services.application_service import ApplicationFactory, TradingApplicationService
+
+
+async def _run_until_stopped(
+    run: Awaitable, stop: Callable[[], Awaitable], duration: Optional[float]
+) -> None:
+    """Await a long-running coroutine; with a duration, call stop() after that many seconds."""
+    if duration is None:
+        await run
+        return
+    task = asyncio.ensure_future(run)
+    done, _ = await asyncio.wait({task}, timeout=duration)
+    if not done:
+        await stop()
+    await task
+
+
+async def _print_session_summary(app: TradingApplicationService) -> None:
+    summary = await app.get_portfolio_summary()
+    orders = await app.order_execution_service.get_order_metrics()
+    print("Session summary (simulated execution):")
+    print(f"  Portfolio value: ${summary['portfolio_value']:,.2f}")
+    print(f"  Cash: ${summary['cash']:,.2f}")
+    for position in summary["positions"]:
+        print(f"  {position['symbol']}: {position['quantity']} @ avg ${position['avg_price']:,.2f}")
+    print(
+        f"  Orders: {orders['total_orders']} submitted, {orders['filled_orders']} filled, "
+        f"{orders['rejected_orders']} rejected by risk checks"
+    )
 
 
 async def simple_momentum_strategy(market_data, portfolio):
@@ -75,7 +103,9 @@ async def mean_reversion_strategy(market_data, portfolio):
     return orders
 
 
-async def run_live_trading():
+async def run_live_trading(duration: Optional[float] = None):
+    # "live" uses the configured market data provider (simulated by default) with
+    # simulated execution; nothing connects to a broker.
     logging.basicConfig(level=logging.INFO)
     orchestrator = TradingOrchestrator()
     await orchestrator.initialize()
@@ -99,26 +129,24 @@ async def run_live_trading():
     await orchestrator.add_strategy(momentum_strategy, simple_momentum_strategy)
     await orchestrator.add_strategy(mean_reversion_strategy_obj, mean_reversion_strategy)
     
-    await orchestrator.start()
+    await _run_until_stopped(orchestrator.start(), orchestrator.stop, duration)
+    await _print_session_summary(orchestrator.application_service)
+
+
+async def run_service(duration: Optional[float] = None):
+    app_service = ApplicationFactory.create_application()
+    await _run_until_stopped(app_service.start(), app_service.stop, duration)
+    await _print_session_summary(app_service)
 
 
 async def run_backtest_example():
-    import pandas as pd
-    import numpy as np
+    from src.backtesting.synthetic import generate_ohlcv
     
     logging.basicConfig(level=logging.INFO)
     
-    dates = pd.date_range(start="2023-01-01", end="2023-12-31", freq="D")
-    np.random.seed(42)
-    
+    # Seeded synthetic bars: the same result on every run, no market data access needed.
     market_data = {
-        "AAPL": pd.DataFrame({
-            "open": 100 + np.cumsum(np.random.randn(len(dates)) * 0.02),
-            "high": 100 + np.cumsum(np.random.randn(len(dates)) * 0.02) + 1,
-            "low": 100 + np.cumsum(np.random.randn(len(dates)) * 0.02) - 1,
-            "close": 100 + np.cumsum(np.random.randn(len(dates)) * 0.02),
-            "volume": np.random.randint(1000000, 5000000, len(dates))
-        }, index=dates)
+        "AAPL": generate_ohlcv(start="2023-01-01", end="2023-12-31", seed=42)
     }
     
     async def backtest_strategy(timestamp, market_data_dict, portfolio):
@@ -172,14 +200,14 @@ async def run_backtest_example():
 async def main():
     config = get_config()
     mode = config.get("mode", "live")
+    duration = config.get("run_duration_seconds")
     
     if mode == "backtest":
         await run_backtest_example()
     elif mode == "service":
-        app_service = ApplicationFactory.create_application()
-        await app_service.start()
+        await run_service(duration)
     else:
-        await run_live_trading()
+        await run_live_trading(duration)
 
 
 if __name__ == "__main__":
