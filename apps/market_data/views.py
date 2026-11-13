@@ -239,7 +239,7 @@ class DataProviderViewSet(viewsets.ReadOnlyModelViewSet):
     """
     ViewSet for viewing data providers and their status
     """
-    queryset = DataProvider.objects.all()
+    queryset = DataProvider.objects.order_by('name')
     serializer_class = DataProviderSerializer
     permission_classes = [permissions.IsAuthenticated]
 
