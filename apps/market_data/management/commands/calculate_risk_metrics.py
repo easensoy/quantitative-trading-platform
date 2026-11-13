@@ -33,7 +33,7 @@ class Command(BaseCommand):
         asyncio.run(self._handle_async(*args, **options))
 
     async def _handle_async(self, *args, **options):
-        service = MarketDataService()
+        service = await MarketDataService.create()
         
         # Get symbols to process
         if options['symbols']:
