@@ -32,7 +32,7 @@ class Command(BaseCommand):
         asyncio.run(self._handle_async(*args, **options))
 
     async def _handle_async(self, *args, **options):
-        service = MarketDataService()
+        service = await MarketDataService.create()
         
         # Get providers to check
         if options['provider']:
@@ -152,11 +152,13 @@ class Command(BaseCommand):
             self.stdout.write("\n🔍 RECENT FAILED CHECKS:")
             self.stdout.write("-" * 30)
             
+            # select_related: reading failure.provider below would otherwise run a lazy
+            # query inside the event loop, which Django rejects (SynchronousOnlyOperation).
             recent_failures = await sync_to_async(list)(
                 DataQualityCheck.objects.filter(
                     status='failed',
                     checked_at__gte=timezone.now() - timezone.timedelta(hours=24)
-                ).order_by('-checked_at')[:10]
+                ).select_related('provider').order_by('-checked_at')[:10]
             )
             
             for failure in recent_failures:
