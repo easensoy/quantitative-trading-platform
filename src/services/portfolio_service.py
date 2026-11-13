@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from dataclasses import replace
 from typing import Dict, List, Optional, Callable
 from datetime import datetime
 import asyncio
@@ -30,6 +31,7 @@ class PortfolioServiceInterface(ABC):
 class PortfolioService(PortfolioServiceInterface, Injectable):
     def __init__(self, event_bus: EventBus, initial_cash: float = 1000000.0):
         self.event_bus = event_bus
+        self.initial_cash = initial_cash
         self.portfolio = Portfolio(
             id="main_portfolio",
             name="Trading Portfolio",
@@ -38,20 +40,29 @@ class PortfolioService(PortfolioServiceInterface, Injectable):
         self.position_callbacks: List[Callable] = []
         self.value_callbacks: List[Callable] = []
         self.last_portfolio_value = initial_cash
+        self.latest_market_data: Dict[str, MarketData] = {}
+        self._initialized = False
         
-        asyncio.create_task(self.event_bus.subscribe("fill_executed", self._handle_fill))
-        asyncio.create_task(self.event_bus.subscribe("market_data", self._handle_market_data))
+    async def initialize(self) -> None:
+        """Subscribe to the event bus. Safe to call more than once."""
+        if self._initialized:
+            return
+        await self.event_bus.subscribe("fill_executed", self._handle_fill)
+        await self.event_bus.subscribe("market_data", self._handle_market_data)
+        self._initialized = True
     
     async def update_position(self, fill: Fill) -> None:
         old_position = self.portfolio.get_position(fill.instrument.symbol)
+        # Snapshot: Portfolio.update_position mutates the existing Position in place.
+        old_position = replace(old_position) if old_position is not None else None
         
-        self.portfolio.update_position(fill)
-        self.portfolio.cash -= (fill.quantity * fill.price + fill.commission)
+        self.portfolio.apply_fill(fill)
         
         new_position = self.portfolio.get_position(fill.instrument.symbol)
         
         await self.event_bus.publish("position_updated", {
             "portfolio_id": self.portfolio.id,
+            "portfolio": self.portfolio,
             "symbol": fill.instrument.symbol,
             "old_position": old_position,
             "new_position": new_position,
@@ -74,13 +85,14 @@ class PortfolioService(PortfolioServiceInterface, Injectable):
         return self.portfolio.get_position(symbol)
     
     async def calculate_portfolio_value(self, market_data: Dict[str, MarketData]) -> float:
+        """Cash plus positions at their latest price; positions without a quote count at cost."""
         total_value = self.portfolio.cash
         
         for symbol, position in self.portfolio.positions.items():
+            current_price = None
             if symbol in market_data:
-                current_price = market_data[symbol].last or market_data[symbol].mid_price or 0
-                position_value = position.quantity * current_price
-                total_value += position_value
+                current_price = market_data[symbol].last or market_data[symbol].mid_price
+            total_value += position.quantity * (current_price or position.avg_price)
         
         return total_value
     
@@ -92,9 +104,9 @@ class PortfolioService(PortfolioServiceInterface, Injectable):
     
     async def get_portfolio_metrics(self, market_data: Dict[str, MarketData]) -> Dict:
         current_value = await self.calculate_portfolio_value(market_data)
-        initial_capital = 1000000.0
+        initial_capital = self.initial_cash
         
-        total_return = (current_value - initial_capital) / initial_capital
+        total_return = (current_value - initial_capital) / initial_capital if initial_capital else 0.0
         
         long_positions = sum(1 for pos in self.portfolio.positions.values() if pos.is_long)
         short_positions = sum(1 for pos in self.portfolio.positions.values() if pos.is_short)
@@ -147,7 +159,9 @@ class PortfolioService(PortfolioServiceInterface, Injectable):
     
     async def _handle_market_data(self, data: Dict) -> None:
         market_data = {data["symbol"]: data["market_data"]}
-        current_value = await self.calculate_portfolio_value(market_data)
+        # Value the whole portfolio from the latest quote of every symbol, not just this one.
+        self.latest_market_data.update(market_data)
+        current_value = await self.calculate_portfolio_value(self.latest_market_data)
         
         if abs(current_value - self.last_portfolio_value) > 1000:
             self.last_portfolio_value = current_value
