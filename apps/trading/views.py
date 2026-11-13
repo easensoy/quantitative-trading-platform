@@ -27,7 +27,8 @@ class TradingAccountViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return TradingAccount.objects.filter(user=self.request.user)
+        # Ordered so paginated pages are stable.
+        return TradingAccount.objects.filter(user=self.request.user).order_by('-created_at')
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -52,7 +53,7 @@ class TradingAccountViewSet(viewsets.ModelViewSet):
                 'daily_pnl': Decimal('0'),
                 'daily_pnl_percentage': Decimal('0'),
                 'total_pnl': account.current_capital - account.initial_capital,
-                'total_pnl_percentage': ((account.current_capital - account.initial_capital) / account.initial_capital * 100),
+                'total_pnl_percentage': ((account.current_capital - account.initial_capital) / account.initial_capital * 100) if account.initial_capital > 0 else Decimal('0'),
                 'leverage': Decimal('1'),
                 'exposure': Decimal('0'),
                 'position_count': 0,
@@ -141,7 +142,7 @@ class StrategyViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Strategy.objects.filter(account__user=self.request.user)
+        return Strategy.objects.filter(account__user=self.request.user).order_by('-created_at')
 
     @action(detail=True, methods=['post'])
     def start(self, request, pk=None):
