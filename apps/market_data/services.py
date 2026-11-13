@@ -19,6 +19,12 @@ class MarketDataService:
     def __init__(self):
         self.providers = self._initialize_providers()
 
+    @classmethod
+    async def create(cls) -> 'MarketDataService':
+        """Construct from async code. __init__ queries the database, which Django forbids
+        inside a running event loop (SynchronousOnlyOperation)."""
+        return await sync_to_async(cls)()
+
     def _initialize_providers(self) -> Dict[str, DataProvider]:
         providers = {}
         for provider_name in settings.TRADING_CONFIG.get('MARKET_DATA_PROVIDERS', ['yfinance']):
@@ -94,14 +100,19 @@ class MarketDataService:
 
         return market_data_objects
 
-    @transaction.atomic
     async def bulk_save_market_data(self, market_data_objects: List[MarketData]) -> int:
+        return await sync_to_async(self._bulk_save_market_data)(market_data_objects)
+
+    # transaction.atomic cannot wrap a coroutine (it only covered creating the coroutine
+    # and raised SynchronousOnlyOperation inside the event loop), so the inserts run here.
+    @transaction.atomic
+    def _bulk_save_market_data(self, market_data_objects: List[MarketData]) -> int:
         saved_count = 0
         batch_size = 1000
         
         for i in range(0, len(market_data_objects), batch_size):
             batch = market_data_objects[i:i + batch_size]
-            await sync_to_async(MarketData.objects.bulk_create)(
+            MarketData.objects.bulk_create(
                 batch,
                 ignore_conflicts=True,
                 batch_size=batch_size
@@ -253,25 +264,27 @@ class MarketDataService:
             (max(0, volatility_1y - 0.25) * 50) * 0.2
         ))
 
-        risk_metrics = RiskMetrics(
+        # (instrument, calculation_date) is unique: recalculating on the same day
+        # (--force-recalculate) must update today's row instead of inserting a second one.
+        risk_metrics, _ = await sync_to_async(RiskMetrics.objects.update_or_create)(
             instrument=instrument,
             calculation_date=timezone.now().date(),
-            volatility_30d=Decimal(str(volatility_30d)),
-            volatility_90d=Decimal(str(volatility_90d)),
-            volatility_1y=Decimal(str(volatility_1y)),
-            avg_return_30d_annualized=Decimal(str(avg_return_30d)),
-            avg_return_1y_annualized=Decimal(str(avg_return_1y)),
-            sharpe_ratio_1y=Decimal(str(sharpe_ratio_1y)) if sharpe_ratio_1y else None,
-            current_drawdown=Decimal(str(current_drawdown)),
-            max_drawdown_1y=Decimal(str(max_drawdown_1y)),
-            var_95_1y=Decimal(str(var_95_1y)),
-            var_99_1y=Decimal(str(var_99_1y)),
-            expected_shortfall_95=Decimal(str(expected_shortfall_95)),
-            volatility_category=volatility_category,
-            risk_score=Decimal(str(risk_score))
+            defaults=dict(
+                volatility_30d=Decimal(str(volatility_30d)),
+                volatility_90d=Decimal(str(volatility_90d)),
+                volatility_1y=Decimal(str(volatility_1y)),
+                avg_return_30d_annualized=Decimal(str(avg_return_30d)),
+                avg_return_1y_annualized=Decimal(str(avg_return_1y)),
+                sharpe_ratio_1y=Decimal(str(sharpe_ratio_1y)) if sharpe_ratio_1y else None,
+                current_drawdown=Decimal(str(current_drawdown)),
+                max_drawdown_1y=Decimal(str(max_drawdown_1y)),
+                var_95_1y=Decimal(str(var_95_1y)),
+                var_99_1y=Decimal(str(var_99_1y)),
+                expected_shortfall_95=Decimal(str(expected_shortfall_95)),
+                volatility_category=volatility_category,
+                risk_score=Decimal(str(risk_score)),
+            ),
         )
-
-        await sync_to_async(risk_metrics.save)()
         return risk_metrics
 
     async def run_data_quality_checks(self, provider: DataProvider) -> List[DataQualityCheck]:
@@ -330,12 +343,14 @@ class MarketDataService:
         if total_records == 0:
             return None
         
+        # The Q expression must come before the keyword filters; the previous order was a
+        # SyntaxError that stopped this module (and every task and command) from importing.
         invalid_records = await sync_to_async(MarketData.objects.filter(
-            provider=provider,
-            timestamp__date=yesterday,
             models.Q(high_price__lt=models.F('low_price')) |
             models.Q(high_price__lt=models.F('close_price')) |
-            models.Q(low_price__gt=models.F('close_price'))
+            models.Q(low_price__gt=models.F('close_price')),
+            provider=provider,
+            timestamp__date=yesterday,
         ).count)()
         
         score = (total_records - invalid_records) / total_records
