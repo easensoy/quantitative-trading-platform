@@ -29,26 +29,44 @@ class MarketDataServiceInterface(ABC):
 
 @service("market_data_service")
 class MarketDataService(MarketDataServiceInterface, Injectable):
-    def __init__(self, event_bus: EventBus, provider: MarketDataProvider):
+    """Polls the provider for subscribed instruments and publishes each quote as a
+    "market_data" event. This service is the only publisher of market data."""
+
+    def __init__(self, event_bus: EventBus, provider: MarketDataProvider, poll_interval: float = 1.0):
         self.event_bus = event_bus
         self.provider = provider
+        self.poll_interval = poll_interval
         self.subscribed_instruments: List[Instrument] = []
         self.latest_data: Dict[str, MarketData] = {}
         self.streaming_task: Optional[asyncio.Task] = None
         self.callbacks: Dict[str, List[Callable]] = {}
+        self._initialized = False
+
+    async def initialize(self) -> None:
+        """Subscribe to the event bus. Safe to call more than once."""
+        if self._initialized:
+            return
+        await self.event_bus.subscribe("market_data", self._handle_market_data)
+        self._initialized = True
         
     async def subscribe_to_instruments(self, instruments: List[Instrument]) -> None:
+        await self.initialize()
         new_instruments = [inst for inst in instruments if inst not in self.subscribed_instruments]
         if new_instruments:
             await self.provider.subscribe_market_data(new_instruments)
             self.subscribed_instruments.extend(new_instruments)
             
-        await self.event_bus.subscribe("market_data", self._handle_market_data)
-    
     async def get_latest_data(self, instrument: Instrument) -> Optional[MarketData]:
         if instrument.symbol in self.latest_data:
             return self.latest_data[instrument.symbol]
         return await self.provider.get_market_data(instrument)
+
+    def get_latest_price(self, instrument: Instrument) -> Optional[float]:
+        """Last traded (or mid) price from the most recent quote, if one has arrived."""
+        market_data = self.latest_data.get(instrument.symbol)
+        if market_data is None:
+            return None
+        return market_data.last or market_data.mid_price
     
     async def start_streaming(self) -> None:
         if self.streaming_task is None:
@@ -93,7 +111,7 @@ class MarketDataService(MarketDataServiceInterface, Injectable):
                         "symbol": instrument.symbol,
                         "market_data": market_data
                     })
-                await asyncio.sleep(1)
+                await asyncio.sleep(self.poll_interval)
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -103,14 +121,19 @@ class MarketDataService(MarketDataServiceInterface, Injectable):
 
 class MarketDataFactory:
     @staticmethod
-    def create_provider(provider_type: str) -> MarketDataProvider:
+    def create_provider(provider_type: str, seed: Optional[int] = None) -> MarketDataProvider:
         if provider_type == "yahoo":
             return YahooFinanceDataProvider()
         elif provider_type == "simulated":
-            return SimulatedMarketDataProvider()
-        return SimulatedMarketDataProvider()
+            return SimulatedMarketDataProvider(seed=seed)
+        return SimulatedMarketDataProvider(seed=seed)
     
     @staticmethod
-    def create_service(event_bus: EventBus, provider_type: str = "simulated") -> MarketDataService:
-        provider = MarketDataFactory.create_provider(provider_type)
-        return MarketDataService(event_bus, provider)
+    def create_service(
+        event_bus: EventBus,
+        provider_type: str = "simulated",
+        poll_interval: float = 1.0,
+        seed: Optional[int] = None,
+    ) -> MarketDataService:
+        provider = MarketDataFactory.create_provider(provider_type, seed=seed)
+        return MarketDataService(event_bus, provider, poll_interval=poll_interval)
