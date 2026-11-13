@@ -7,7 +7,9 @@ from .models import (
 from apps.market_data.models import Instrument
 
 
-class InstrumentSerializer(serializers.ModelSerializer):
+# Named apart from apps.market_data.serializers.InstrumentSerializer: the OpenAPI schema
+# derives component names from class names, and two "Instrument" components collide.
+class StrategyInstrumentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Instrument
         fields = ['symbol', 'name', 'asset_type', 'exchange', 'currency', 'sector', 'industry']
@@ -24,13 +26,27 @@ class TradingAccountSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
+def _request_user(serializer):
+    request = serializer.context.get('request')
+    user = getattr(request, 'user', None)
+    return user if user is not None and user.is_authenticated else None
+
+
 class StrategySerializer(serializers.ModelSerializer):
-    instruments = InstrumentSerializer(many=True, read_only=True)
+    instruments = StrategyInstrumentSerializer(many=True, read_only=True)
     instrument_symbols = serializers.ListField(
         child=serializers.CharField(max_length=20),
         write_only=True,
         required=False
     )
+
+    def get_fields(self):
+        fields = super().get_fields()
+        user = _request_user(self)
+        if user is not None:
+            # Only the requesting user's accounts are valid targets.
+            fields['account'].queryset = TradingAccount.objects.filter(user=user)
+        return fields
 
     class Meta:
         model = Strategy
@@ -82,14 +98,29 @@ class OrderSerializer(serializers.ModelSerializer):
             'submitted_at', 'filled_at', 'created_at', 'updated_at'
         ]
 
+    def get_fields(self):
+        fields = super().get_fields()
+        user = _request_user(self)
+        if user is not None:
+            # Orders may only reference the requesting user's accounts and strategies.
+            fields['account'].queryset = TradingAccount.objects.filter(user=user)
+            fields['strategy'].queryset = Strategy.objects.filter(account__user=user)
+        return fields
+
     def validate(self, data):
-        if data['order_type'] in ['limit', 'stop_limit'] and not data.get('price'):
+        # Partial updates (PATCH) omit unchanged fields; fall back to the stored values.
+        def current(field):
+            return data[field] if field in data else getattr(self.instance, field, None)
+
+        order_type = current('order_type')
+        if order_type in ['limit', 'stop_limit'] and not current('price'):
             raise serializers.ValidationError("Price is required for limit orders")
         
-        if data['order_type'] in ['stop', 'stop_limit'] and not data.get('stop_price'):
+        if order_type in ['stop', 'stop_limit'] and not current('stop_price'):
             raise serializers.ValidationError("Stop price is required for stop orders")
         
-        if data['quantity'] <= 0:
+        quantity = current('quantity')
+        if quantity is not None and quantity <= 0:
             raise serializers.ValidationError("Quantity must be positive")
         
         return data
