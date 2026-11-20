@@ -1,0 +1,826 @@
+{
+  "report": "README showcase",
+  "evidence": {
+    "data": "synthetic",
+    "execution": "simulated (BacktestEngine + SimulatedBroker)",
+    "note": "Synthetic data, simulated execution. The universe has no predictable returns by construction, so these results demonstrate the software and its accounting, not a profitable strategy."
+  },
+  "provenance": {
+    "normalization": "SHA-256 of the file contents after removing a UTF-8 byte-order mark and converting CRLF and CR line endings to LF",
+    "source": {
+      "fingerprint": "ee65e6a129755a490568fabfddd186097b390f192316ad8e41ad200c8b32fa2f",
+      "commit": "899120c0e815d89edcd9fa7932b09d5b4022ffb5",
+      "clean": true,
+      "uncommitted_files": [],
+      "scope": [
+        "scripts/generate_readme_assets.py",
+        "src/analytics/**/*.py",
+        "src/backtesting/**/*.py",
+        "src/core/**/*.py",
+        "src/reporting/**/*.py",
+        "src/research/**/*.py",
+        "src/services/**/*.py"
+      ],
+      "files": {
+        "scripts/generate_readme_assets.py": "b175bf19a60383be098fb474c99616ddb1788ff9b49e429884d0d2617b523825",
+        "src/analytics/__init__.py": "9762115f83b13a12683bce7bafa5f69eab328745048729cf18a31a3bf6d95ee2",
+        "src/analytics/attribution.py": "35327033671ed1b20074645002b39ead485b81616dc00185ca4ac9d5a380a142",
+        "src/analytics/capacity.py": "beebc00f979fe6d2c134e9c91c5739aef29e1710116244f7c44290311f82fada",
+        "src/analytics/distribution.py": "866ff22cf3eaad473c92bea0de1ac07fd3e3bd84e881041829134d7b7c93b927",
+        "src/analytics/drawdowns.py": "aa8f0aab4a48bece614763e2654c121a9e3f9ed9e589cd940063c2315d79a328",
+        "src/analytics/exposure.py": "6451403587b19296f13f397ba9361a9a471bcf520bc5d9a5959ea77b9527fcfb",
+        "src/analytics/performance.py": "0a2e7a32e6d0cb9cd3afd84f6328512b47729b0e3f4aaa39adcbec532b73330d",
+        "src/analytics/trades.py": "fd3c791d2a9279bf778b1a9090de1fa18e0e6a697e29ce99feb9a451de90cc66",
+        "src/analytics/uncertainty.py": "c69b3a55cee85dd6cc9249c98c35ab1af34b143f353b5523fc93cbd01fa43dde",
+        "src/backtesting/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "src/backtesting/engine.py": "ddf220c9319b1c13187b209df924b29883749a49fb662ae5ca07f4ec6fa5d4a7",
+        "src/backtesting/market_impact.py": "02121b07e0152b72e08448cc6f726cc142a607711a40fbfaed8ed36d04e66d9d",
+        "src/backtesting/synthetic.py": "94329da76daa0091775e68c3e86d36ab74ce56e6680e89efc5e8722bc883e4fa",
+        "src/core/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "src/core/config.py": "3dc1583d5e460435d6b486cc1ea7969cde0ef3acfc6a361efaf7bb5f3376d527",
+        "src/core/container.py": "fb7bd547123a6b060c8dd83cb4beee800e1146d463ebedc479dc41fc3a5c7eaa",
+        "src/core/event_bus.py": "96ef4d8a3b5485bdc69697e1074b828f789e682b2ef98445da24bd8ae1024b89",
+        "src/core/exceptions.py": "fb535d7bb41723310c899aa1bc3d59dd798bd2e3dc301e2e6dca0e068da9ab1e",
+        "src/core/implementations.py": "a97f27d4bf291b7ddbc403613f0eae836b0207226d302991c80d9d2eeeda7ff4",
+        "src/core/models.py": "f223fc103dc5226848fbb2667bf778acc588e6c18d5fa9ed7197b429c80c9245",
+        "src/core/orchestrator.py": "7e28799f5c44f22effc7845e294d91ed4daf536c50b84a22ee846634baa5f2f2",
+        "src/reporting/__init__.py": "8a7a689c50dde94b364aadc38f44653f065e36a334691432e8e906a136128016",
+        "src/reporting/documents.py": "8813d7472166860db42de124b57025106cf8f2cdcfb6ed7f5fdf199ea5db9346",
+        "src/reporting/figures.py": "870ad0b309d72bedc29b667fe146ebf7664df3b73cf873767b286dfbb9025915",
+        "src/reporting/theme.py": "3fee3d31be5f5e7bd322a113a002ee8b7bfa81343c24048cabc816db38dd13ff",
+        "src/research/__init__.py": "db5f717919839de9b839251e86a0c6d4f1ee7519e7101addc045ea47ba43ac27",
+        "src/research/benchmarks.py": "fdfa8083241b024fdbf3ea787faee86d0d74667aefde7721702b5897b2603c58",
+        "src/research/datasets.py": "440a9e66245185b94e401c67813866b8c38c30cb5b9d972a76440832fd9a7840",
+        "src/research/experiments.py": "c3bb02e4790282e2e9ec73d05faaef91ae39c00dd69242c2c9541e0fa7af107d",
+        "src/research/provenance.py": "2a1f403eb0a717f8472828100fbd7bd574aaa22ade1ed267e82cfeb0a492d326",
+        "src/research/showcase.py": "e498a26d332b4e5d6be22701b80e8be74f8543fee09b708b740b713efc289631",
+        "src/research/strategies.py": "6ccc09ea2c31cb10634a833ab1fa3740b995a5e1e3966c01b93eef58a12f0d0d",
+        "src/services/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "src/services/application_service.py": "bc3efd2e13bf7a0571e291c2a2ed8841e00b609b4f3a0aacd8036e5922c1c25c",
+        "src/services/market_data_service.py": "cb651bc4d171882ca1bca6296219d8fed3286df8ac421e0d44a6a4140315f19c",
+        "src/services/order_execution_service.py": "47cb4f577e6e0a6ed07f648aea1ca05989d3a5e1cb4c8291ad9bcd5e6c04ef53",
+        "src/services/portfolio_service.py": "b7547158794ed4af3c63274220c56fec70de87f5f672f5dbadba9df59b276fda",
+        "src/services/risk_service.py": "9ffa20cfd5df57b5ab8917b72cfeed26740cb3c0bfa87520017436aec9e97a81",
+        "src/services/strategy_service.py": "95011a2a15c2e444a468f753bf6a403e7470fbed38542732994c97759a356ac1"
+      }
+    },
+    "dependencies": {
+      "specifications": {
+        "pyproject.toml": "23d4d02eba11bd5fb5074a336a27e51fabcb57db1d1fe89d3e507526a227854c",
+        "requirements_engine.txt": "41847dfd85b92bd8cb55017e7d9666d47e7b836b05fd6dca7d37c51f88b845b0",
+        "requirements_reports.txt": "4581c3a5918f397c7f4accae74a4ec6a8b493e793fcd8f2f063167942f641e2c"
+      },
+      "installed": {
+        "python": "CPython 3.11.14",
+        "numpy": "1.24.3",
+        "pandas": "2.1.0",
+        "scipy": "1.11.2",
+        "matplotlib": "3.7.2",
+        "pillow": "10.0.0",
+        "contourpy": "1.1.0",
+        "kiwisolver": "1.5.1",
+        "fonttools": "4.68.0",
+        "freetype (bundled with matplotlib)": "2.6.1"
+      }
+    },
+    "inputs": {
+      "dataset": "synthetic_universe_v1",
+      "origin": "synthetic",
+      "files": {
+        "prices.csv": "b8ac96c84be7ab8c220158298f30aa1c7c3beed0e89b8a998b03dec96b8f7e47",
+        "instruments.csv": "53f3da5bd6453dda83f3d2e8053a4edf6cf8d21fd74afd676ed98953133f23e9",
+        "regimes.csv": "0b106d5dea3b8cb25ee664b97e4aba9c488fb028fbe74790f83b12e73f4972f1",
+        "manifest.json": "bf02b8e9bb05e4e285b02e49508d24c8b1b3dac4d4c7fd21812f1cf6eaaad4ab"
+      }
+    },
+    "versions": {
+      "strategy": "tsmom-1.0",
+      "methodology": "1.0",
+      "methodology_document": {
+        "docs/methodology.md": "92df13f4983c0126f621aa98edd229de2ac31b190d441d2f94d923c04abfd2d4"
+      }
+    }
+  },
+  "dataset": {
+    "name": "synthetic_universe_v1",
+    "origin": "synthetic",
+    "description": "Synthetic equity-like universe: factor model, regime-switching volatility, Student-t shocks, constant drift; no predictable returns by construction.",
+    "generator": "src.research.datasets.generate_synthetic_universe",
+    "calendar": "business days (Mon-Fri), no exchange holidays",
+    "currency": "USD",
+    "data_quality_cases": {
+      "late_listing": [
+        "NEW_A"
+      ],
+      "missing_sector": [
+        "NEW_A"
+      ],
+      "halted_days": {
+        "TEC_B": [
+          "2020-03-24",
+          "2020-04-10",
+          "2020-04-13",
+          "2022-02-09",
+          "2022-05-31"
+        ]
+      }
+    },
+    "files": {
+      "prices.csv": {
+        "sha256": "b8ac96c84be7ab8c220158298f30aa1c7c3beed0e89b8a998b03dec96b8f7e47",
+        "rows": 9903
+      },
+      "instruments.csv": {
+        "sha256": "53f3da5bd6453dda83f3d2e8053a4edf6cf8d21fd74afd676ed98953133f23e9",
+        "rows": 8
+      },
+      "regimes.csv": {
+        "sha256": "0b106d5dea3b8cb25ee664b97e4aba9c488fb028fbe74790f83b12e73f4972f1",
+        "rows": 1304
+      }
+    },
+    "spec": {
+      "name": "synthetic_universe_v1",
+      "seed": 20261120,
+      "start": "2019-01-01",
+      "end": "2023-12-29",
+      "market_drift": 0.06,
+      "market_vol": 0.16,
+      "sector_vol": 0.1,
+      "turbulent_vol_multiplier": 2.25,
+      "p_stay_calm": 0.985,
+      "p_stay_turbulent": 0.95,
+      "t_dof": 5.0,
+      "halted_symbol": "TEC_B",
+      "halted_days": 5,
+      "instruments": [
+        {
+          "symbol": "TEC_A",
+          "sector": "Technology",
+          "start_price": 180.0,
+          "market_beta": 1.25,
+          "sector_loading": 0.8,
+          "idio_vol": 0.22,
+          "adv_shares": 4000000,
+          "listed_from": null
+        },
+        {
+          "symbol": "TEC_B",
+          "sector": "Technology",
+          "start_price": 95.0,
+          "market_beta": 1.15,
+          "sector_loading": 0.8,
+          "idio_vol": 0.26,
+          "adv_shares": 3000000,
+          "listed_from": null
+        },
+        {
+          "symbol": "FIN_A",
+          "sector": "Financials",
+          "start_price": 60.0,
+          "market_beta": 1.05,
+          "sector_loading": 0.7,
+          "idio_vol": 0.18,
+          "adv_shares": 6000000,
+          "listed_from": null
+        },
+        {
+          "symbol": "FIN_B",
+          "sector": "Financials",
+          "start_price": 42.0,
+          "market_beta": 1.1,
+          "sector_loading": 0.7,
+          "idio_vol": 0.21,
+          "adv_shares": 5000000,
+          "listed_from": null
+        },
+        {
+          "symbol": "NRG_A",
+          "sector": "Energy",
+          "start_price": 75.0,
+          "market_beta": 0.8,
+          "sector_loading": 1.0,
+          "idio_vol": 0.24,
+          "adv_shares": 3500000,
+          "listed_from": null
+        },
+        {
+          "symbol": "HLT_A",
+          "sector": "Healthcare",
+          "start_price": 130.0,
+          "market_beta": 0.7,
+          "sector_loading": 0.6,
+          "idio_vol": 0.17,
+          "adv_shares": 2500000,
+          "listed_from": null
+        },
+        {
+          "symbol": "UTL_A",
+          "sector": "Utilities",
+          "start_price": 55.0,
+          "market_beta": 0.45,
+          "sector_loading": 0.5,
+          "idio_vol": 0.13,
+          "adv_shares": 2000000,
+          "listed_from": null
+        },
+        {
+          "symbol": "NEW_A",
+          "sector": null,
+          "start_price": 25.0,
+          "market_beta": 1.3,
+          "sector_loading": 0.0,
+          "idio_vol": 0.35,
+          "adv_shares": 1500000,
+          "listed_from": "2021-01-04"
+        }
+      ]
+    }
+  },
+  "configuration": {
+    "strategy": "tsmom-1.0",
+    "parameters": {
+      "lookback": 60,
+      "rebalance_every": 5,
+      "vol_window": 60,
+      "gross_target": 1.0,
+      "max_weight": 0.25,
+      "min_trade_weight": 0.005
+    },
+    "execution": {
+      "initial_capital": 1000000.0,
+      "commission": 0.001,
+      "slippage": 0.0005,
+      "currency": "USD"
+    },
+    "rolling_windows": [
+      63,
+      126
+    ],
+    "periods_per_year": 261.0645913329676,
+    "parameter_grid": {
+      "lookback": [
+        10,
+        20,
+        40,
+        60,
+        120,
+        250
+      ],
+      "rebalance_every": [
+        1,
+        5,
+        10,
+        21
+      ]
+    },
+    "walk_forward": {
+      "train_bars": 504,
+      "test_bars": 126,
+      "selection": "in-sample Sharpe (net of costs)"
+    },
+    "bootstrap": {
+      "method": "stationary bootstrap (Politis-Romano)",
+      "mean_block": 21,
+      "samples": 5000,
+      "seed": 20261121,
+      "horizon_bars": 261
+    },
+    "capacity": {
+      "capital_levels": [
+        1000000.0,
+        3000000.0,
+        10000000.0,
+        30000000.0,
+        100000000.0,
+        300000000.0,
+        1000000000.0,
+        3000000000.0
+      ],
+      "impact_coefficients": [
+        0.5,
+        1.0,
+        2.0
+      ],
+      "model": "Y * sigma * sqrt(shares / ADV) * notional, sigma/ADV from 20 prior bars"
+    }
+  },
+  "main_run": {
+    "run_id": "44e8297853",
+    "label": "tsmom-1.0 L60-R5 (pre-registered)",
+    "strategy_version": "tsmom-1.0",
+    "parameters": {
+      "lookback": 60,
+      "rebalance_every": 5,
+      "vol_window": 60,
+      "gross_target": 1.0,
+      "max_weight": 0.25,
+      "min_trade_weight": 0.005
+    },
+    "dataset": {
+      "name": "synthetic_universe_v1",
+      "origin": "synthetic",
+      "prices_sha256": "b8ac96c84be7ab8c220158298f30aa1c7c3beed0e89b8a998b03dec96b8f7e47"
+    },
+    "execution": {
+      "initial_capital": 1000000.0,
+      "commission": 0.001,
+      "slippage": 0.0005,
+      "currency": "USD",
+      "model": "next-bar close fills, 5 bps slippage, 10 bps commission, no financing or borrow costs"
+    },
+    "engine_start": "2019-01-01",
+    "evaluation_start": "2019-01-01",
+    "end": "2023-12-29",
+    "bars": 1304,
+    "fills": 1065,
+    "orders": 1065,
+    "rejected_orders": 0,
+    "strategy_errors": 0
+  },
+  "walk_forward_runs": [
+    {
+      "run_id": "9bc40f68b2",
+      "label": "walk-forward window 1 (L120-R1)",
+      "strategy_version": "tsmom-1.0",
+      "parameters": {
+        "lookback": 120,
+        "rebalance_every": 1,
+        "vol_window": 60,
+        "gross_target": 1.0,
+        "max_weight": 0.25,
+        "min_trade_weight": 0.005
+      },
+      "dataset": {
+        "name": "synthetic_universe_v1",
+        "origin": "synthetic",
+        "prices_sha256": "b8ac96c84be7ab8c220158298f30aa1c7c3beed0e89b8a998b03dec96b8f7e47"
+      },
+      "execution": {
+        "initial_capital": 1000000.0,
+        "commission": 0.001,
+        "slippage": 0.0005,
+        "currency": "USD",
+        "model": "next-bar close fills, 5 bps slippage, 10 bps commission, no financing or borrow costs"
+      },
+      "engine_start": "2020-06-05",
+      "evaluation_start": "2020-12-07",
+      "end": "2021-05-31",
+      "bars": 257,
+      "fills": 244,
+      "orders": 245,
+      "rejected_orders": 0,
+      "strategy_errors": 0
+    },
+    {
+      "run_id": "46c0a9c729",
+      "label": "walk-forward window 2 (L120-R10)",
+      "strategy_version": "tsmom-1.0",
+      "parameters": {
+        "lookback": 120,
+        "rebalance_every": 10,
+        "vol_window": 60,
+        "gross_target": 1.0,
+        "max_weight": 0.25,
+        "min_trade_weight": 0.005
+      },
+      "dataset": {
+        "name": "synthetic_universe_v1",
+        "origin": "synthetic",
+        "prices_sha256": "b8ac96c84be7ab8c220158298f30aa1c7c3beed0e89b8a998b03dec96b8f7e47"
+      },
+      "execution": {
+        "initial_capital": 1000000.0,
+        "commission": 0.001,
+        "slippage": 0.0005,
+        "currency": "USD",
+        "model": "next-bar close fills, 5 bps slippage, 10 bps commission, no financing or borrow costs"
+      },
+      "engine_start": "2020-11-30",
+      "evaluation_start": "2021-06-01",
+      "end": "2021-11-23",
+      "bars": 257,
+      "fills": 82,
+      "orders": 82,
+      "rejected_orders": 0,
+      "strategy_errors": 0
+    },
+    {
+      "run_id": "504d747711",
+      "label": "walk-forward window 3 (L60-R5)",
+      "strategy_version": "tsmom-1.0",
+      "parameters": {
+        "lookback": 60,
+        "rebalance_every": 5,
+        "vol_window": 60,
+        "gross_target": 1.0,
+        "max_weight": 0.25,
+        "min_trade_weight": 0.005
+      },
+      "dataset": {
+        "name": "synthetic_universe_v1",
+        "origin": "synthetic",
+        "prices_sha256": "b8ac96c84be7ab8c220158298f30aa1c7c3beed0e89b8a998b03dec96b8f7e47"
+      },
+      "execution": {
+        "initial_capital": 1000000.0,
+        "commission": 0.001,
+        "slippage": 0.0005,
+        "currency": "USD",
+        "model": "next-bar close fills, 5 bps slippage, 10 bps commission, no financing or borrow costs"
+      },
+      "engine_start": "2021-08-17",
+      "evaluation_start": "2021-11-24",
+      "end": "2022-05-18",
+      "bars": 197,
+      "fills": 123,
+      "orders": 131,
+      "rejected_orders": 0,
+      "strategy_errors": 0
+    },
+    {
+      "run_id": "7ff8c93801",
+      "label": "walk-forward window 4 (L60-R5)",
+      "strategy_version": "tsmom-1.0",
+      "parameters": {
+        "lookback": 60,
+        "rebalance_every": 5,
+        "vol_window": 60,
+        "gross_target": 1.0,
+        "max_weight": 0.25,
+        "min_trade_weight": 0.005
+      },
+      "dataset": {
+        "name": "synthetic_universe_v1",
+        "origin": "synthetic",
+        "prices_sha256": "b8ac96c84be7ab8c220158298f30aa1c7c3beed0e89b8a998b03dec96b8f7e47"
+      },
+      "execution": {
+        "initial_capital": 1000000.0,
+        "commission": 0.001,
+        "slippage": 0.0005,
+        "currency": "USD",
+        "model": "next-bar close fills, 5 bps slippage, 10 bps commission, no financing or borrow costs"
+      },
+      "engine_start": "2022-02-09",
+      "evaluation_start": "2022-05-19",
+      "end": "2022-11-10",
+      "bars": 197,
+      "fills": 111,
+      "orders": 113,
+      "rejected_orders": 0,
+      "strategy_errors": 0
+    },
+    {
+      "run_id": "c65c6d4dbb",
+      "label": "walk-forward window 5 (L60-R10)",
+      "strategy_version": "tsmom-1.0",
+      "parameters": {
+        "lookback": 60,
+        "rebalance_every": 10,
+        "vol_window": 60,
+        "gross_target": 1.0,
+        "max_weight": 0.25,
+        "min_trade_weight": 0.005
+      },
+      "dataset": {
+        "name": "synthetic_universe_v1",
+        "origin": "synthetic",
+        "prices_sha256": "b8ac96c84be7ab8c220158298f30aa1c7c3beed0e89b8a998b03dec96b8f7e47"
+      },
+      "execution": {
+        "initial_capital": 1000000.0,
+        "commission": 0.001,
+        "slippage": 0.0005,
+        "currency": "USD",
+        "model": "next-bar close fills, 5 bps slippage, 10 bps commission, no financing or borrow costs"
+      },
+      "engine_start": "2022-08-04",
+      "evaluation_start": "2022-11-11",
+      "end": "2023-05-05",
+      "bars": 197,
+      "fills": 75,
+      "orders": 75,
+      "rejected_orders": 0,
+      "strategy_errors": 0
+    },
+    {
+      "run_id": "84e838be83",
+      "label": "walk-forward window 6 (L250-R10)",
+      "strategy_version": "tsmom-1.0",
+      "parameters": {
+        "lookback": 250,
+        "rebalance_every": 10,
+        "vol_window": 60,
+        "gross_target": 1.0,
+        "max_weight": 0.25,
+        "min_trade_weight": 0.005
+      },
+      "dataset": {
+        "name": "synthetic_universe_v1",
+        "origin": "synthetic",
+        "prices_sha256": "b8ac96c84be7ab8c220158298f30aa1c7c3beed0e89b8a998b03dec96b8f7e47"
+      },
+      "execution": {
+        "initial_capital": 1000000.0,
+        "commission": 0.001,
+        "slippage": 0.0005,
+        "currency": "USD",
+        "model": "next-bar close fills, 5 bps slippage, 10 bps commission, no financing or borrow costs"
+      },
+      "engine_start": "2022-05-06",
+      "evaluation_start": "2023-05-08",
+      "end": "2023-12-29",
+      "bars": 431,
+      "fills": 91,
+      "orders": 91,
+      "rejected_orders": 0,
+      "strategy_errors": 0
+    }
+  ],
+  "parameter_sweep": [
+    {
+      "label": "L10-R1",
+      "status": "ok",
+      "error": "",
+      "run_id": "0c75f468b0",
+      "sharpe": -0.7581615502712228,
+      "cost_pa": 0.08173056338435962
+    },
+    {
+      "label": "L10-R5",
+      "status": "ok",
+      "error": "",
+      "run_id": "f7c62e4a99",
+      "sharpe": 0.023719145895973962,
+      "cost_pa": 0.04897391360308985
+    },
+    {
+      "label": "L10-R10",
+      "status": "ok",
+      "error": "",
+      "run_id": "e6cf6bb006",
+      "sharpe": 0.12903357820493758,
+      "cost_pa": 0.03598627854434671
+    },
+    {
+      "label": "L10-R21",
+      "status": "ok",
+      "error": "",
+      "run_id": "f76632315e",
+      "sharpe": 0.22214604188888834,
+      "cost_pa": 0.017652665456029313
+    },
+    {
+      "label": "L20-R1",
+      "status": "ok",
+      "error": "",
+      "run_id": "af1d550022",
+      "sharpe": -0.3600106046281785,
+      "cost_pa": 0.07026588930715277
+    },
+    {
+      "label": "L20-R5",
+      "status": "ok",
+      "error": "",
+      "run_id": "88af123b9f",
+      "sharpe": 0.09478072233559444,
+      "cost_pa": 0.041531443663674006
+    },
+    {
+      "label": "L20-R10",
+      "status": "ok",
+      "error": "",
+      "run_id": "28e5503e5c",
+      "sharpe": 0.07881795632817824,
+      "cost_pa": 0.028897675614988693
+    },
+    {
+      "label": "L20-R21",
+      "status": "ok",
+      "error": "",
+      "run_id": "0f69612422",
+      "sharpe": -0.14688957133842176,
+      "cost_pa": 0.01758097435374875
+    },
+    {
+      "label": "L40-R1",
+      "status": "ok",
+      "error": "",
+      "run_id": "9ff6dcb35c",
+      "sharpe": -0.8234688061940355,
+      "cost_pa": 0.042222401274083304
+    },
+    {
+      "label": "L40-R5",
+      "status": "ok",
+      "error": "",
+      "run_id": "8a057b9072",
+      "sharpe": -0.816791834690596,
+      "cost_pa": 0.019110114304512333
+    },
+    {
+      "label": "L40-R10",
+      "status": "ok",
+      "error": "",
+      "run_id": "e63e62464f",
+      "sharpe": -0.5065196000141112,
+      "cost_pa": 0.01601751777478838
+    },
+    {
+      "label": "L40-R21",
+      "status": "ok",
+      "error": "",
+      "run_id": "668a2bad9f",
+      "sharpe": -0.3269293538490306,
+      "cost_pa": 0.011378980250717081
+    },
+    {
+      "label": "L60-R1",
+      "status": "ok",
+      "error": "",
+      "run_id": "92f7c0ee64",
+      "sharpe": 0.04626242459010376,
+      "cost_pa": 0.046008759160947925
+    },
+    {
+      "label": "L60-R5",
+      "status": "ok",
+      "error": "",
+      "run_id": "44e8297853",
+      "sharpe": 0.30602714080468685,
+      "cost_pa": 0.023536602086490995
+    },
+    {
+      "label": "L60-R10",
+      "status": "ok",
+      "error": "",
+      "run_id": "2fd7941f2e",
+      "sharpe": 0.19374733671534228,
+      "cost_pa": 0.014741218026648876
+    },
+    {
+      "label": "L60-R21",
+      "status": "ok",
+      "error": "",
+      "run_id": "56bd1adfee",
+      "sharpe": 0.2065543436022937,
+      "cost_pa": 0.010368395274968802
+    },
+    {
+      "label": "L120-R1",
+      "status": "ok",
+      "error": "",
+      "run_id": "43077be01b",
+      "sharpe": 0.18770225541457003,
+      "cost_pa": 0.038974219744049195
+    },
+    {
+      "label": "L120-R5",
+      "status": "ok",
+      "error": "",
+      "run_id": "89f101404a",
+      "sharpe": 0.19227699952499142,
+      "cost_pa": 0.01814854394286385
+    },
+    {
+      "label": "L120-R10",
+      "status": "ok",
+      "error": "",
+      "run_id": "ec10595a1a",
+      "sharpe": 0.21503469875720438,
+      "cost_pa": 0.01170417127820295
+    },
+    {
+      "label": "L120-R21",
+      "status": "ok",
+      "error": "",
+      "run_id": "b7560180cf",
+      "sharpe": 0.21895039919097545,
+      "cost_pa": 0.009749057133047216
+    },
+    {
+      "label": "L250-R1",
+      "status": "ok",
+      "error": "",
+      "run_id": "47b6aeaafa",
+      "sharpe": 0.24418415491524162,
+      "cost_pa": 0.01851034806086582
+    },
+    {
+      "label": "L250-R5",
+      "status": "ok",
+      "error": "",
+      "run_id": "4570a96117",
+      "sharpe": 0.42944770483858224,
+      "cost_pa": 0.010848677422043124
+    },
+    {
+      "label": "L250-R10",
+      "status": "ok",
+      "error": "",
+      "run_id": "410e128316",
+      "sharpe": 0.4232226995201895,
+      "cost_pa": 0.008743281647541231
+    },
+    {
+      "label": "L250-R21",
+      "status": "ok",
+      "error": "",
+      "run_id": "e0df0d2075",
+      "sharpe": 0.4544075888564852,
+      "cost_pa": 0.006609063680791192
+    }
+  ],
+  "checks": [
+    {
+      "name": "Business-day calendar",
+      "passed": true,
+      "detail": "1304 bars, no weekend or duplicate timestamps"
+    },
+    {
+      "name": "Annualization",
+      "passed": true,
+      "detail": "261.1 return observations per calendar year over 4.99 years; calendar: business days (Mon-Fri), no exchange holidays; a fixed 252 would understate volatility by 1.8%"
+    },
+    {
+      "name": "Equity finite and positive",
+      "passed": true,
+      "detail": "min 750,387, max 1,341,832"
+    },
+    {
+      "name": "Ledger identity",
+      "passed": true,
+      "detail": "max |equity - (cash + positions at marks)| = 6.98e-10"
+    },
+    {
+      "name": "No missing marks",
+      "passed": true,
+      "detail": "0 open positions without a mark; 5 bars used a carried-forward close"
+    },
+    {
+      "name": "P&L decomposition reconciles",
+      "passed": true,
+      "detail": "frictionless - slippage - commissions = 189,335.20; equity change = 189,335.20"
+    },
+    {
+      "name": "FIFO trades reconcile",
+      "passed": true,
+      "detail": "realized 166,230.18 + open 23,105.02 vs 189,335.20"
+    },
+    {
+      "name": "Slippage counted once",
+      "passed": true,
+      "detail": "slippage is inside fill prices; shown as a component, not deducted again"
+    },
+    {
+      "name": "Finite headline metrics",
+      "passed": true,
+      "detail": "all finite"
+    },
+    {
+      "name": "Benchmark alignment",
+      "passed": true,
+      "detail": "1303 of 1303 strategy dates have a benchmark return"
+    },
+    {
+      "name": "Walk-forward separation",
+      "passed": true,
+      "detail": "6 windows; every test window starts after its training window ends"
+    },
+    {
+      "name": "Sweep accounted for",
+      "passed": true,
+      "detail": "24 runs, 0 not ok (kept in the report)"
+    },
+    {
+      "name": "No strategy errors",
+      "passed": true,
+      "detail": "0 errors during the main run"
+    }
+  ],
+  "environment": {
+    "cpu": "Intel(R) Core(TM) Ultra 7 165H",
+    "logical_cpus": "22",
+    "memory_gb": "31.5",
+    "os": "Windows 11 (build 26300)",
+    "python": "3.11.14",
+    "numpy": "1.24.3",
+    "pandas": "2.1.0",
+    "scipy": "1.11.2",
+    "matplotlib": "3.7.2"
+  },
+  "figures": [
+    "attribution",
+    "capacity",
+    "distribution",
+    "drawdowns",
+    "engineering",
+    "exposure",
+    "robustness",
+    "tearsheet",
+    "trades",
+    "uncertainty",
+    "walk-forward"
+  ]
+}
