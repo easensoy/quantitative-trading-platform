@@ -1,0 +1,136 @@
+{
+  "name": "synthetic_universe_v1",
+  "origin": "synthetic",
+  "description": "Synthetic equity-like universe: factor model, regime-switching volatility, Student-t shocks, constant drift; no predictable returns by construction.",
+  "generator": "src.research.datasets.generate_synthetic_universe",
+  "spec": {
+    "name": "synthetic_universe_v1",
+    "seed": 20261120,
+    "start": "2019-01-01",
+    "end": "2023-12-29",
+    "market_drift": 0.06,
+    "market_vol": 0.16,
+    "sector_vol": 0.1,
+    "turbulent_vol_multiplier": 2.25,
+    "p_stay_calm": 0.985,
+    "p_stay_turbulent": 0.95,
+    "t_dof": 5.0,
+    "halted_symbol": "TEC_B",
+    "halted_days": 5,
+    "instruments": [
+      {
+        "symbol": "TEC_A",
+        "sector": "Technology",
+        "start_price": 180.0,
+        "market_beta": 1.25,
+        "sector_loading": 0.8,
+        "idio_vol": 0.22,
+        "adv_shares": 4000000,
+        "listed_from": null
+      },
+      {
+        "symbol": "TEC_B",
+        "sector": "Technology",
+        "start_price": 95.0,
+        "market_beta": 1.15,
+        "sector_loading": 0.8,
+        "idio_vol": 0.26,
+        "adv_shares": 3000000,
+        "listed_from": null
+      },
+      {
+        "symbol": "FIN_A",
+        "sector": "Financials",
+        "start_price": 60.0,
+        "market_beta": 1.05,
+        "sector_loading": 0.7,
+        "idio_vol": 0.18,
+        "adv_shares": 6000000,
+        "listed_from": null
+      },
+      {
+        "symbol": "FIN_B",
+        "sector": "Financials",
+        "start_price": 42.0,
+        "market_beta": 1.1,
+        "sector_loading": 0.7,
+        "idio_vol": 0.21,
+        "adv_shares": 5000000,
+        "listed_from": null
+      },
+      {
+        "symbol": "NRG_A",
+        "sector": "Energy",
+        "start_price": 75.0,
+        "market_beta": 0.8,
+        "sector_loading": 1.0,
+        "idio_vol": 0.24,
+        "adv_shares": 3500000,
+        "listed_from": null
+      },
+      {
+        "symbol": "HLT_A",
+        "sector": "Healthcare",
+        "start_price": 130.0,
+        "market_beta": 0.7,
+        "sector_loading": 0.6,
+        "idio_vol": 0.17,
+        "adv_shares": 2500000,
+        "listed_from": null
+      },
+      {
+        "symbol": "UTL_A",
+        "sector": "Utilities",
+        "start_price": 55.0,
+        "market_beta": 0.45,
+        "sector_loading": 0.5,
+        "idio_vol": 0.13,
+        "adv_shares": 2000000,
+        "listed_from": null
+      },
+      {
+        "symbol": "NEW_A",
+        "sector": null,
+        "start_price": 25.0,
+        "market_beta": 1.3,
+        "sector_loading": 0.0,
+        "idio_vol": 0.35,
+        "adv_shares": 1500000,
+        "listed_from": "2021-01-04"
+      }
+    ]
+  },
+  "calendar": "business days (Mon-Fri), no exchange holidays",
+  "currency": "USD",
+  "data_quality_cases": {
+    "late_listing": [
+      "NEW_A"
+    ],
+    "missing_sector": [
+      "NEW_A"
+    ],
+    "halted_days": {
+      "TEC_B": [
+        "2020-03-24",
+        "2020-04-10",
+        "2020-04-13",
+        "2022-02-09",
+        "2022-05-31"
+      ]
+    }
+  },
+  "files": {
+    "prices.csv": {
+      "sha256": "b8ac96c84be7ab8c220158298f30aa1c7c3beed0e89b8a998b03dec96b8f7e47",
+      "rows": 9903
+    },
+    "instruments.csv": {
+      "sha256": "53f3da5bd6453dda83f3d2e8053a4edf6cf8d21fd74afd676ed98953133f23e9",
+      "rows": 8
+    },
+    "regimes.csv": {
+      "sha256": "0b106d5dea3b8cb25ee664b97e4aba9c488fb028fbe74790f83b12e73f4972f1",
+      "rows": 1304
+    }
+  }
+}
