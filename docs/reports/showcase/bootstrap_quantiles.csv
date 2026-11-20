@@ -1,0 +1,12 @@
+,value
+p_loss,0.4258
+p_dd_20,0.1794
+return_p5,-0.19196724
+return_p50,0.03087602833
+return_p95,0.3416358797
+drawdown_p5,-0.2654833113
+drawdown_p50,-0.131970568
+drawdown_p95,-0.06790324652
+sharpe_p5,-1.386378869
+sharpe_p50,0.2837279621
+sharpe_p95,1.965131386
