@@ -1,6 +1,6 @@
 # QuantCore Django Migration Guide
 
-> For the verified setup steps (Windows), configuration and current component status, see [README.md](README.md). This guide describes the migration design.
+> For the verified setup steps (Windows), configuration and current component status, see [docs/development.md](docs/development.md). This guide describes the migration design.
 
 This document outlines the complete migration of QuantCore from Snowflake + Airflow + DBT to Django + PostgreSQL + Celery.
 
