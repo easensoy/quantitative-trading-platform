@@ -116,3 +116,79 @@ async def test_backtest_example_runs(capsys):
         assert label in output
     trades_line = next(line for line in output.splitlines() if line.startswith("Total Trades:"))
     assert int(trades_line.split(":")[1]) > 0
+
+
+async def test_positions_keep_their_last_mark_over_missing_bars():
+    full = bars(seed=1)
+    halted = bars(seed=2, start_price=50.0).drop(full.index[3])  # no BBB bar on day 3
+    backtest = engine()
+
+    result = await backtest.run_backtest(buy_once("BBB", 100), {"AAA": full, "BBB": halted})
+
+    day3 = backtest.ledger[3]
+    last_close = halted["close"].loc[full.index[2]]
+    assert day3.stale_marks == ["BBB"]
+    assert day3.marks["BBB"] == last_close
+    # The position is still worth something on the halted day: no false drawdown.
+    assert result.pnl_series.iloc[3] == pytest.approx(day3.cash + 100 * last_close)
+
+
+async def test_order_log_records_rejections_with_reasons():
+    data = {"AAA": bars(seed=1), "BBB": bars(seed=2).iloc[5:]}  # BBB starts on day 5
+    backtest = engine()
+    calls = []
+
+    async def strategy(timestamp, market_data, portfolio):
+        calls.append(timestamp)
+        if len(calls) > 1:
+            return []
+        instrument = lambda symbol: Instrument(symbol, AssetType.EQUITY, "NYSE")
+        return [
+            Order(id="", instrument=instrument("AAA"), side=OrderSide.BUY, order_type=OrderType.MARKET, quantity=10),
+            Order(id="", instrument=instrument("BBB"), side=OrderSide.BUY, order_type=OrderType.MARKET, quantity=10),
+            Order(id="", instrument=instrument("AAA"), side=OrderSide.BUY, order_type=OrderType.MARKET, quantity=0),
+        ]
+
+    await backtest.run_backtest(strategy, data)
+
+    log = [(r.order.instrument.symbol, r.accepted, r.reason) for r in backtest.order_log]
+    assert log == [
+        ("AAA", True, None),
+        ("BBB", False, "no market data for symbol at decision time"),
+        ("AAA", False, "non-positive quantity"),
+    ]
+    assert [trade.instrument.symbol for trade in backtest.trades] == ["AAA"]
+
+
+async def test_execution_records_carry_reference_price_and_timing():
+    data = bars()
+    backtest = engine()
+
+    await backtest.run_backtest(buy_once("AAPL", 100), {"AAPL": data})
+
+    execution = backtest.broker.executions[0]
+    assert execution.submitted_at == data.index[0]
+    assert execution.filled_at == data.index[1]
+    assert execution.reference_price == data["close"].iloc[1]
+    assert execution.fill_price == pytest.approx(execution.reference_price * 1.0005)
+    assert execution.slippage_cost == pytest.approx(100 * execution.reference_price * 0.0005)
+    assert execution.commission == pytest.approx(backtest.trades[0].commission)
+
+
+async def test_ledger_equity_is_cash_plus_marked_positions():
+    data = {"AAA": bars(seed=1), "BBB": bars(seed=2, start_price=80.0)}
+    backtest = engine()
+    calls = []
+
+    async def alternate(timestamp, market_data, portfolio):
+        calls.append(timestamp)
+        side = OrderSide.BUY if len(calls) % 4 < 2 else OrderSide.SELL
+        return [Order(id="", instrument=Instrument(s, AssetType.EQUITY, "NYSE"), side=side,
+                      order_type=OrderType.MARKET, quantity=25) for s in market_data]
+
+    await backtest.run_backtest(alternate, data)
+
+    assert len(backtest.ledger) == len(backtest.equity_curve)
+    for entry in backtest.ledger:
+        marked = sum(qty * entry.marks[s] for s, qty in entry.quantities.items())
+        assert entry.equity == pytest.approx(entry.cash + marked)
