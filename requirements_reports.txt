@@ -1,0 +1,11 @@
+# Research reports and README figures: scripts/generate_readme_assets.py, src/reporting.
+# Requires Python 3.11, like the engine it runs on.
+#
+#   python -m pip install -r requirements_reports.txt
+#
+# matplotlib, contourpy and pillow are pinned to versions that work with numpy 1.24.3:
+# an unpinned install pulled numpy 2.x, which the pinned pandas 2.1.0 cannot import.
+-r requirements_engine.txt
+matplotlib==3.7.2
+contourpy==1.1.0
+pillow==10.0.0
