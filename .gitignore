@@ -18,6 +18,11 @@ dist/
 .coverage
 htmlcov/
 
+# Datasets: only the small generated demo dataset (with its manifest) is tracked.
+# Put downloaded or licensed market data elsewhere under data/; it stays local.
+data/*
+!data/demo/
+
 # Runtime output
 logs/
 *.log
