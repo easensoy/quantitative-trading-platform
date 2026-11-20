@@ -29,6 +29,55 @@ class BacktestConfig:
 
 
 @dataclass
+class ExecutionRecord:
+    """One simulated fill with the reference price it was priced from.
+
+    reference_price is the bar close the broker started from; fill_price already
+    includes slippage, so slippage_cost is informational and must not be deducted
+    from P&L a second time.
+    """
+    order_id: str
+    trade_id: str
+    symbol: str
+    side: str
+    quantity: int
+    submitted_at: datetime
+    filled_at: datetime
+    reference_price: float
+    fill_price: float
+    commission: float
+
+    @property
+    def notional(self) -> float:
+        return self.quantity * self.fill_price
+
+    @property
+    def slippage_cost(self) -> float:
+        direction = 1 if self.side == OrderSide.BUY.value else -1
+        return direction * (self.fill_price - self.reference_price) * self.quantity
+
+
+@dataclass
+class OrderRecord:
+    """An order returned by the strategy, as accepted or rejected by the engine."""
+    decided_at: datetime
+    order: Order
+    accepted: bool
+    reason: Optional[str] = None
+
+
+@dataclass
+class LedgerEntry:
+    """Portfolio state at the end of one bar, after fills and new orders."""
+    timestamp: datetime
+    cash: float
+    equity: float
+    quantities: Dict[str, int]
+    marks: Dict[str, float]
+    stale_marks: List[str]
+
+
+@dataclass
 class SimulatedMarketData:
     timestamp: datetime
     open: float
@@ -58,14 +107,17 @@ class SimulatedBroker:
         self.impact_engine = MarketImpactEngine(config.market_impact_model)
         self.pending_orders: Dict[str, Order] = {}
         self.filled_orders: List[Fill] = []
+        self.executions: List[ExecutionRecord] = []
+        self.submitted_at: Dict[str, datetime] = {}
         self.order_counter = 0
-        
+
     def submit_order(self, order: Order, market_data: SimulatedMarketData) -> str:
         order.id = f"order_{self.order_counter}"
         self.order_counter += 1
         order.status = OrderStatus.SUBMITTED
-        
+
         self.pending_orders[order.id] = order
+        self.submitted_at[order.id] = market_data.timestamp
         return order.id
     
     def process_orders(self, market_data: SimulatedMarketData, symbol: Optional[str] = None) -> List[Fill]:
@@ -100,7 +152,21 @@ class SimulatedBroker:
             return None
         
         commission = order.quantity * fill_price * self.config.commission
-        
+        trade_id = f"trade_{len(self.filled_orders)}"
+
+        self.executions.append(ExecutionRecord(
+            order_id=order.id,
+            trade_id=trade_id,
+            symbol=order.instrument.symbol,
+            side=order.side.value,
+            quantity=order.quantity,
+            submitted_at=self.submitted_at.get(order.id, market_data.timestamp),
+            filled_at=market_data.timestamp,
+            reference_price=market_data.close,
+            fill_price=fill_price,
+            commission=commission,
+        ))
+
         return Fill(
             order_id=order.id,
             instrument=order.instrument,
@@ -109,8 +175,9 @@ class SimulatedBroker:
             price=fill_price,
             timestamp=market_data.timestamp,
             venue=Venue.NYSE,
-            trade_id=f"trade_{len(self.filled_orders)}",
-            commission=commission
+            trade_id=trade_id,
+            commission=commission,
+            strategy_id=order.strategy_id
         )
     
     def _calculate_fill_price(self, order: Order, market_data: SimulatedMarketData) -> Optional[float]:
@@ -205,10 +272,16 @@ class PerformanceAnalyzer:
 class BacktestEngine:
     """Bar-by-bar simulation.
 
-    Orders a strategy returns at bar t are filled by SimulatedBroker at bar t+1 for the
-    same symbol (close price adjusted by slippage; limit orders only when marketable).
-    Fills update both positions and cash, commissions included. No margin or risk
-    checks are applied, so a strategy can spend more cash than it has.
+    Orders a strategy returns at bar t are filled by SimulatedBroker at the next bar of
+    the same symbol (close price adjusted by slippage; limit orders only when marketable).
+    Fills update both positions and cash, commissions included. Positions are valued at
+    their symbol's latest close, carried forward over bars where the symbol has no data.
+    No margin, financing or risk checks are applied, so a strategy can spend more cash
+    than it has and cash earns no interest.
+
+    After a run the engine exposes, for reporting: trades (fills), broker.executions
+    (fills with reference prices), order_log (accepted and rejected orders with reasons),
+    ledger (cash, equity, quantities and marks per bar) and strategy_errors.
     """
 
     def __init__(self, config: BacktestConfig):
@@ -227,6 +300,10 @@ class BacktestEngine:
         self.timestamps: List[datetime] = []
         self.trades: List[Fill] = []
         self.positions_history: List[Position] = []
+        self.order_log: List[OrderRecord] = []
+        self.ledger: List[LedgerEntry] = []
+        self.strategy_errors: List[tuple] = []
+        self.last_marks: Dict[str, float] = {}
         
     async def run_backtest(
         self,
@@ -280,44 +357,72 @@ class BacktestEngine:
                     ask=row.get('ask')
                 )
         
+        for symbol, bar in current_market_data.items():
+            self.last_marks[symbol] = bar.close
+
         fills = []
         for symbol, market_data_point in current_market_data.items():
             batch_fills = self.broker.process_orders(market_data_point, symbol=symbol)
             fills.extend(batch_fills)
-        
+
         for fill in fills:
             # apply_fill moves cash as well as positions; position-only updates made
             # every purchase look like a gain in the equity curve.
             self.portfolio.apply_fill(fill)
             self.trades.append(fill)
-        
+
         try:
             new_orders = await strategy_func(timestamp, current_market_data, self.portfolio)
-            
-            if new_orders:
-                for order in new_orders:
-                    if order.instrument.symbol in current_market_data:
-                        market_data_point = current_market_data[order.instrument.symbol]
-                        self.broker.submit_order(order, market_data_point)
+
+            for order in new_orders or []:
+                reason = self._rejection_reason(order, current_market_data)
+                if reason is None:
+                    self.broker.submit_order(order, current_market_data[order.instrument.symbol])
+                else:
+                    order.status = OrderStatus.REJECTED
+                self.order_log.append(OrderRecord(timestamp, order, reason is None, reason))
         except Exception as e:
+            self.strategy_errors.append((timestamp, repr(e)))
             print(f"Strategy error at {timestamp}: {e}")
-        
+
         portfolio_value = self._calculate_portfolio_value(current_market_data)
         self.equity_curve.append(portfolio_value)
         self.timestamps.append(timestamp)
-        
+        self.ledger.append(LedgerEntry(
+            timestamp=timestamp,
+            cash=self.portfolio.cash,
+            equity=portfolio_value,
+            quantities={s: p.quantity for s, p in self.portfolio.positions.items()},
+            marks={s: self.last_marks.get(s, p.avg_price) for s, p in self.portfolio.positions.items()},
+            stale_marks=[s for s in self.portfolio.positions if s not in current_market_data],
+        ))
+
         # Copies, because positions are mutated in place by later fills.
         self.positions_history.extend(replace(pos) for pos in self.portfolio.positions.values())
-    
+
+    @staticmethod
+    def _rejection_reason(order: Order, market_data: Dict[str, SimulatedMarketData]) -> Optional[str]:
+        if order.quantity <= 0:
+            return "non-positive quantity"
+        if order.instrument.symbol not in market_data:
+            # Previously these orders were dropped silently.
+            return "no market data for symbol at decision time"
+        return None
+
     def _calculate_portfolio_value(self, market_data: Dict[str, SimulatedMarketData]) -> float:
+        """Cash plus positions at their latest close.
+
+        A symbol without a bar at this timestamp (a halt or a gap in the data) keeps its
+        last close; valuing it at zero would put a false drawdown in the equity curve.
+        """
         total_value = self.portfolio.cash
-        
+
         for symbol, position in self.portfolio.positions.items():
-            if symbol in market_data:
-                current_price = market_data[symbol].close
-                position_value = position.quantity * current_price
-                total_value += position_value
-        
+            current_price = self.last_marks.get(symbol)
+            if current_price is None:
+                current_price = position.avg_price
+            total_value += position.quantity * current_price
+
         return total_value
     
     def _generate_backtest_result(self, benchmark_data: Optional[pd.DataFrame]) -> BacktestResult:
