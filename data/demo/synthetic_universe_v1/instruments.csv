@@ -1,0 +1,9 @@
+symbol,sector,listed_from
+TEC_A,Technology,2019-01-01
+TEC_B,Technology,2019-01-01
+FIN_A,Financials,2019-01-01
+FIN_B,Financials,2019-01-01
+NRG_A,Energy,2019-01-01
+HLT_A,Healthcare,2019-01-01
+UTL_A,Utilities,2019-01-01
+NEW_A,,2021-01-04
