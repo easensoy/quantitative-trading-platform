@@ -10,7 +10,8 @@ authors = [{name = "Trading Infrastructure Team"}]
 license = {text = "MIT"}
 requires-python = ">=3.11"
 # Version ranges by stack. The pinned, tested installs are the requirements files:
-# requirements_engine.txt, requirements_django.txt and requirements_dev.txt (both).
+# requirements_engine.txt, requirements_django.txt, requirements_reports.txt and
+# requirements_dev.txt (all three).
 # requirements.txt pins the legacy stack below; see README.md.
 dependencies = [
     # Trading engine runtime (src/)
@@ -38,6 +39,11 @@ django = [
     "django-celery-beat>=2.5.0",
     "django-celery-results>=2.5.1",
     "yfinance>=0.2.18",
+]
+# Research report and README figure generation (src/reporting, scripts/generate_readme_assets.py)
+reports = [
+    "matplotlib>=3.7.2",
+    "pillow>=10.0.0",
 ]
 dev = [
     "pytest>=7.4.2",
